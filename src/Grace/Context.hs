@@ -250,7 +250,8 @@ solveType context type_ = foldl snoc type_ context
     snoc t (SolvedAlternatives a u) = Type.solveAlternatives a u t
     snoc t  _                       = t
 
-{-| Substitute a t`Type.Record` using the solved entries of a `Context`
+{-| Substitute a t`Type.Record` using the solved entries of a `Context`.
+    Fields introduced by a solved row inherit the supplied source location.
 
     >>> original = Type.Fields [("x", Type.Scalar () Monotype.Bool)] (Monotype.UnsolvedFields 0)
     >>> pretty @(Record ()) original
@@ -260,22 +261,19 @@ solveType context type_ = foldl snoc type_ context
     >>> pretty entry
     a = •
 
-    >>> pretty @(Record ()) (solveRecord [ entry ] original)
+    >>> pretty @(Record ()) (solveRecord [ entry ] () original)
     { x: Bool }
 -}
-solveRecord :: Context s -> Type.Record s -> Type.Record s
-solveRecord context oldFields = newFields
+solveRecord :: Context s -> s -> Type.Record s -> Type.Record s
+solveRecord context location oldFields = newFields
   where
-    location =
-        error "Grace.Context.solveRecord: Internal error - Missing location field"
-
     newFields =
         case solveType context Type.Record{ fields = oldFields, location } of
             Type.Record{ fields } -> fields
             _ -> error "Grace.Context.solveRecord: Internal Error - solveType changed a record into something else"
 
-{-| Substitute a t`Type.Union` using the solved entries of a `Context`
-    `Context`
+{-| Substitute a t`Type.Union` using the solved entries of a `Context`.
+    Alternatives introduced by a solved row inherit the supplied source location.
 
     >>> original = Type.Alternatives [("A", Type.Scalar () Monotype.Bool)] (Monotype.UnsolvedAlternatives 0)
     >>> pretty @(Union ()) original
@@ -285,15 +283,12 @@ solveRecord context oldFields = newFields
     >>> pretty entry
     a = •
 
-    >>> pretty @(Union ()) (solveUnion [ entry ] original)
+    >>> pretty @(Union ()) (solveUnion [ entry ] () original)
     < A: Bool >
 -}
-solveUnion :: Context s -> Type.Union s -> Type.Union s
-solveUnion context oldAlternatives = newAlternatives
+solveUnion :: Context s -> s -> Type.Union s -> Type.Union s
+solveUnion context location oldAlternatives = newAlternatives
   where
-    location =
-        error "Grace.Context.solveUnion: Internal error - Missing location field"
-
     newAlternatives =
         case solveType context Type.Union{ alternatives = oldAlternatives, location } of
             Type.Union{ alternatives } -> alternatives

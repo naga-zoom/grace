@@ -432,7 +432,7 @@ supertypeOf Record{ location = location₀, fields = fields₀ } Record{ locatio
             instantiateFieldsL
                 p₀
                 location₁
-                (Context.solveRecord context₂
+                (Context.solveRecord context₂ location₁
                     (Type.Fields (Map.toList extra₁)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -443,7 +443,7 @@ supertypeOf Record{ location = location₀, fields = fields₀ } Record{ locatio
             instantiateFieldsL
                 p₁
                 location₀
-                (Context.solveRecord context₃
+                (Context.solveRecord context₃ location₀
                     (Type.Fields (Map.toList extra₀)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -462,7 +462,7 @@ supertypeOf Record{ location = location₀, fields = fields₀ } Record{ locatio
             instantiateFieldsL
                 p₀
                 location₁
-                (Context.solveRecord context₁
+                (Context.solveRecord context₁ location₁
                     (Type.Fields (Map.toList extra₁) remainingFields₁)
                 )
 
@@ -482,7 +482,7 @@ supertypeOf Record{ location = location₀, fields = fields₀ } Record{ locatio
             instantiateFieldsL
                 p₁
                 location₀
-                (Context.solveRecord context₁
+                (Context.solveRecord context₁ location₀
                     (Type.Fields (Map.toList extra₀) remainingFields₀)
                 )
 
@@ -580,7 +580,7 @@ supertypeOf Type.Union{ location = location₀, alternatives = alternatives₀ }
             instantiateAlternativesL
                 p₀
                 location₁
-                (Context.solveUnion context₂
+                (Context.solveUnion context₂ location₁
                     (Type.Alternatives (Map.toList extra₁)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -591,7 +591,7 @@ supertypeOf Type.Union{ location = location₀, alternatives = alternatives₀ }
             instantiateAlternativesL
                 p₁
                 location₀
-                (Context.solveUnion context₃
+                (Context.solveUnion context₃ location₀
                     (Type.Alternatives (Map.toList extra₀)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -784,7 +784,7 @@ subtypeOf Record{ location = location₀, fields = fields₀ } Record{ location 
 
             instantiateFieldsR
                 location₁
-                (Context.solveRecord context₂
+                (Context.solveRecord context₂ location₁
                     (Type.Fields (Map.toList extra₁)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -795,7 +795,7 @@ subtypeOf Record{ location = location₀, fields = fields₀ } Record{ location 
 
             instantiateFieldsR
                 location₀
-                (Context.solveRecord context₃
+                (Context.solveRecord context₃ location₀
                     (Type.Fields (Map.toList extra₀)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -910,7 +910,7 @@ subtypeOf type₀@Type.Union{ location = location₀, alternatives = alternative
             instantiateAlternativesL
                 p₀
                 location₁
-                (Context.solveUnion context₂
+                (Context.solveUnion context₂ location₁
                     (Type.Alternatives (Map.toList extra₁)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -921,7 +921,7 @@ subtypeOf type₀@Type.Union{ location = location₀, alternatives = alternative
             instantiateAlternativesL
                 p₁
                 location₀
-                (Context.solveUnion context₃
+                (Context.solveUnion context₃ location₀
                     (Type.Alternatives (Map.toList extra₀)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -1345,7 +1345,7 @@ isSubtypeOf expression subType@Type.Record{ fields = Type.Fields subFieldTypesLi
             instantiateFieldsL
                 p₀
                 (Type.location superType)
-                (Context.solveRecord context₂
+                (Context.solveRecord context₂ (Type.location superType)
                     (Type.Fields (Map.toList superExtraFieldTypes)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -1355,7 +1355,7 @@ isSubtypeOf expression subType@Type.Record{ fields = Type.Fields subFieldTypesLi
 
             instantiateFieldsR
                 (Type.location subType)
-                (Context.solveRecord context₃
+                (Context.solveRecord context₃ (Type.location subType)
                     (Type.Fields (Map.toList subExtraFieldTypes)
                         (Monotype.UnsolvedFields p₂)
                     )
@@ -1370,7 +1370,7 @@ isSubtypeOf expression subType@Type.Record{ fields = Type.Fields subFieldTypesLi
             instantiateFieldsL
                 p₀
                 (Type.location superType)
-                (Context.solveRecord context₁
+                (Context.solveRecord context₁ (Type.location superType)
                     (Type.Fields (Map.toList superExtraFieldTypes) superRemainingFields)
                 )
 
@@ -1386,7 +1386,7 @@ isSubtypeOf expression subType@Type.Record{ fields = Type.Fields subFieldTypesLi
 
             instantiateFieldsR
                 (Type.location subType)
-                (Context.solveRecord context₁
+                (Context.solveRecord context₁ (Type.location subType)
                     (Type.Fields (Map.toList subExtraFieldTypes) subRemainingFields)
                 )
                 p₁
@@ -1511,7 +1511,7 @@ isSubtypeOf expression subType@Type.Union{ alternatives = Type.Alternatives subA
             instantiateAlternativesL
                 p₀
                 (Type.location superType)
-                (Context.solveUnion context₂
+                (Context.solveUnion context₂ (Type.location superType)
                     (Type.Alternatives (Map.toList superExtraAlternativeTypes)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -1521,7 +1521,7 @@ isSubtypeOf expression subType@Type.Union{ alternatives = Type.Alternatives subA
 
             instantiateAlternativesR
                 (Type.location subType)
-                (Context.solveUnion context₃
+                (Context.solveUnion context₃ (Type.location subType)
                     (Type.Alternatives (Map.toList subExtraAlternativeTypes)
                         (Monotype.UnsolvedAlternatives p₂)
                     )
@@ -1535,7 +1535,7 @@ isSubtypeOf expression subType@Type.Union{ alternatives = Type.Alternatives subA
                 instantiateAlternativesL
                     p₀
                     (Type.location superType)
-                    (Context.solveUnion context₁
+                    (Context.solveUnion context₁ (Type.location superType)
                         (Type.Alternatives (Map.toList superExtraAlternativeTypes)
                             superRemainingAlternatives
                         )
@@ -1546,7 +1546,7 @@ isSubtypeOf expression subType@Type.Union{ alternatives = Type.Alternatives subA
 
             instantiateAlternativesR
                 (Type.location subType)
-                (Context.solveUnion context₁
+                (Context.solveUnion context₁ (Type.location subType)
                     (Type.Alternatives (Map.toList subExtraAlternativeTypes)
                         subRemainingAlternatives
                     )
@@ -2914,7 +2914,7 @@ infer e₀ = do
                             context₁ <- get
 
                             let Type.Fields keyTypes _ =
-                                    Context.solveRecord context₁ unsolvedRecord
+                                    Context.solveRecord context₁ location unsolvedRecord
 
                             set context₀
 
@@ -4782,7 +4782,7 @@ check annotated@Syntax.Record{ location, fieldValues = fieldValues₀ } annotati
 
             instantiateFieldsR
                 (Syntax.location annotated)
-                (Context.solveRecord context
+                (Context.solveRecord context (Syntax.location annotated)
                     (Type.Fields (Map.toList extraValueTypes) Monotype.EmptyFields)
                 )
                 p

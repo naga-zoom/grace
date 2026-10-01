@@ -405,12 +405,9 @@ evaluate env₀ syntax₀ = do
             Syntax.If{ predicate, ifTrue, ifFalse } -> do
                 predicate' <- loop env predicate
 
-                ifTrue'  <- loop env ifTrue
-                ifFalse' <- loop env ifFalse
-
-                pure case predicate' of
-                    Value.Scalar _ (Bool True) -> ifTrue'
-                    Value.Scalar _ (Bool False) -> ifFalse'
+                case predicate' of
+                    Value.Scalar _ (Bool True) -> loop env ifTrue
+                    Value.Scalar _ (Bool False) -> loop env ifFalse
                     _ -> error "Grace.Normalize.evaluate: if predicate must be a boolean value"
 
             Syntax.Prompt{ location, import_, arguments, schema } -> do

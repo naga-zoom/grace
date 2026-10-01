@@ -33,6 +33,8 @@ import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import qualified Data.Vector as Vector
 import qualified Grace.Decode as Decode
+import qualified Grace.Aeson as Grace.Aeson
+import qualified Grace.Infer as Infer
 import qualified Grace.Interpret as Interpret
 import qualified Grace.Monotype as Monotype
 import qualified Grace.Pretty
@@ -180,6 +182,7 @@ main = do
                 , decodeWithTypeError
                 , decodeWithRangeError
                 , loadSuccessfully
+                , conditionalEvaluation
                 , load "()" "{ }" ()
                 , load "(Bool, Bool)" "{ \"0\": false, \"1\": true }" (False, True)
                 , load "(Bool, Bool)" "{ \"0\": false, \"1\": true }" (False, True)
@@ -298,6 +301,37 @@ load name code expected = Tasty.HUnit.testCase ("load " <> name) do
     actual <- Interpret.load (Code "(input)" code)
 
     Tasty.HUnit.assertEqual "" expected actual
+
+conditionalEvaluation :: TestTree
+conditionalEvaluation = Tasty.testGroup "Conditional evaluation"
+    [ load "true skips invalid JSON in else"
+        "if true then 1 else (read \"{\" : Natural)" (1 :: Natural)
+    , load "false skips invalid JSON in then"
+        "if false then (read \"{\" : Natural) else 2" (2 :: Natural)
+    , load "nested selected branch reads JSON"
+        "if true then (if false then (read \"{\" : Natural) else (read \"3\" : Natural)) else (read \"{\" : Natural)"
+        (3 :: Natural)
+    , Tasty.HUnit.testCase "selected invalid JSON still fails" do
+        result <- Exception.try
+            (Interpret.load (Code "(input)" "if true then (read \"{\" : Natural) else 1"))
+            :: IO (Either Grace.Aeson.JSONDecodingFailed Natural)
+        case result of
+            Left Grace.Aeson.JSONDecodingFailed{ text } ->
+                Tasty.HUnit.assertEqual "selected read input" "{" text
+            Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
+    , Tasty.HUnit.testCase "unselected ill-typed branch is rejected" do
+        result <- Exception.try
+            (Interpret.load (Code "(input)" "if true then 1 else (true : Natural)"))
+            :: IO (Either Infer.TypeInferenceError Natural)
+        case result of
+            Left (Infer.NotSubtype actual expected) -> do
+                Tasty.HUnit.assertEqual "actual branch type" (Monotype.Bool)
+                    (Type.scalar actual)
+                Tasty.HUnit.assertEqual "required branch type" (Monotype.Natural)
+                    (Type.scalar expected)
+            Left err -> Tasty.HUnit.assertFailure ("Unexpected type error: " <> show err)
+            Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
+    ]
 
 data DecodingError = TypeError | RangeError deriving stock (Eq, Show)
 
