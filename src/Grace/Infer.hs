@@ -42,7 +42,6 @@ import Grace.Location (Location(..))
 import Grace.Monad (Grace, Status(..))
 import Grace.Monotype (Monotype)
 import Grace.Pretty (Pretty(..))
-import Grace.Prompt.Types (Prompt(..))
 import Grace.Type (Type(..))
 import Grace.Value (Value)
 
@@ -3159,7 +3158,7 @@ infer e₀ = do
             return (Type.Scalar{ scalar = Monotype.Text, .. }, Syntax.Text{ chunks = Syntax.Chunks text₀ newRest, .. })
 
         Syntax.Prompt{ location, import_, arguments, schema } -> do
-            let argumentsType = fmap (\_ -> location) (expected @Prompt)
+            argumentsType <- fmap (fmap (\_ -> location)) (Grace.promptArgumentsType import_)
 
             newArguments <- check arguments argumentsType
 
@@ -4413,7 +4412,8 @@ check Syntax.Alternative{ location, name, argument } annotation@Type.Union{ alte
                     Exception.throwIO (UnionTypeMismatch actual annotation [ name ])
 
 check Syntax.Prompt{ schema = Nothing, .. } annotation = do
-    newArguments <- check arguments (fmap (\_ -> location) (expected @Prompt))
+    argumentsType <- fmap (fmap (\_ -> location)) (Grace.promptArgumentsType import_)
+    newArguments <- check arguments argumentsType
 
     return Syntax.Prompt{ arguments = newArguments, schema = Just annotation, .. }
 

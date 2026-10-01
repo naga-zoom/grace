@@ -6,6 +6,8 @@
 {-# LANGUAGE EmptyDataDecls        #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
 
 module Main where
 
@@ -26,9 +28,14 @@ import Numeric.Natural (Natural)
 import System.FilePath ((</>))
 import Test.Tasty (TestTree)
 
+import qualified Control.Concurrent as Concurrent
+import qualified Control.Concurrent.MVar as MVar
 import qualified Control.Exception.Safe as Exception
 import qualified Data.Aeson as Aeson
 import qualified Data.Sequence as Seq
+import qualified Control.Monad.Reader as Reader
+import qualified Data.IORef as IORef
+import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import qualified Data.Vector as Vector
@@ -36,6 +43,8 @@ import qualified Grace.Decode as Decode
 import qualified Grace.Aeson as Grace.Aeson
 import qualified Grace.Infer as Infer
 import qualified Grace.Interpret as Interpret
+import qualified Grace.Monad as Grace
+import qualified Grace.Normalize as Normalize
 import qualified Grace.Monotype as Monotype
 import qualified Grace.Pretty
 import qualified Grace.Syntax as Syntax
@@ -183,6 +192,7 @@ main = do
                 , decodeWithRangeError
                 , loadSuccessfully
                 , conditionalEvaluation
+                , hostedPrompts
                 , load "()" "{ }" ()
                 , load "(Bool, Bool)" "{ \"0\": false, \"1\": true }" (False, True)
                 , load "(Bool, Bool)" "{ \"0\": false, \"1\": true }" (False, True)
@@ -330,6 +340,172 @@ conditionalEvaluation = Tasty.testGroup "Conditional evaluation"
                 Tasty.HUnit.assertEqual "required branch type" (Monotype.Natural)
                     (Type.scalar expected)
             Left err -> Tasty.HUnit.assertFailure ("Unexpected type error: " <> show err)
+            Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
+    ]
+
+data HostPrompt = HostPrompt
+    { model :: Text, effort :: Text, text :: Text }
+    deriving stock (Eq, Generic, Show)
+    deriving anyclass (FromGrace, ToGraceType)
+
+runHosted
+    :: forall p a. (FromGrace p, FromGrace a)
+    => (p -> Type Location -> IO Aeson.Value)
+    -> [(Text, Type Location, Value.Value Location)] -> Text -> IO a
+runHosted handler bindings code = do
+    let input = Code "(hosted test)" code
+    let status = Grace.Status{ count = 0, context = [] }
+    let annotation = fmap (\_ -> Unknown) (Decode.expected @a)
+    (_, value) <- Grace.evalGrace input status
+        (Grace.withPrompt handler (Interpret.interpretWith bindings (Just annotation)))
+    case Decode.decode value of
+        Left err -> Exception.throwIO err
+        Right result -> pure result
+
+hostedPrompts :: TestTree
+hostedPrompts = Tasty.testGroup "Hosted prompts"
+    [ Tasty.HUnit.testCase "keyless typed prompt uses the supplied interpreter" do
+        calls <- IORef.newIORef []
+        let handler request schema = do
+                IORef.modifyIORef' calls (<> [(request, fmap (\_ -> ()) schema)])
+                pure (Aeson.Number 7)
+        actual <- Exception.try
+            (runHosted handler [] "prompt{ model: \"chosen\", effort: \"low\", text: \"question\" } : Natural")
+            :: IO (Either SomeException Natural)
+        case actual of
+            Left err -> Tasty.HUnit.assertFailure (Exception.displayException err)
+            Right result -> Tasty.HUnit.assertEqual "checked answer" 7 result
+        requests <- IORef.readIORef calls
+        Tasty.HUnit.assertEqual "typed request and output schema"
+            [(HostPrompt "chosen" "low" "question", Type.Scalar () Monotype.Natural)] requests
+    , Tasty.HUnit.testCase "conditional lambda chains two calls within the scope" do
+        calls <- IORef.newIORef []
+        let handler request _ = do
+                IORef.modifyIORef' calls (<> [request])
+                pure case request of
+                    HostPrompt "writer" "low" "evidence" -> Aeson.String "proposal"
+                    HostPrompt "reviewer" "high" "proposal" -> Aeson.Bool True
+                    other -> error ("Unexpected host request: " <> show other)
+        let program = Text.concat
+                [ "(\\input -> "
+                , "let context = input.context "
+                , "let proposal = if input.unresolved then prompt{ model: \"writer\", effort: \"low\", text: context } : Text else input.known "
+                , "let review = if input.unresolved then prompt{ model: \"reviewer\", effort: \"high\", text: proposal } : Bool else true "
+                , "in if review then proposal else input.known) "
+                , "{ context: \"evidence\", known: \"known\", unresolved: "
+                , "unresolved }"
+                ]
+        known <- runHosted handler ["unresolved" Interpret.<~ False] program :: IO Text
+        Tasty.HUnit.assertEqual "deterministic answer" "known" known
+        Tasty.HUnit.assertEqual "zero calls on deterministic path" [] =<< IORef.readIORef calls
+        actual <- runHosted handler ["unresolved" Interpret.<~ True] program :: IO Text
+        Tasty.HUnit.assertEqual "reviewed proposal" "proposal" actual
+        Tasty.HUnit.assertEqual "chained arguments and chosen profiles"
+            [HostPrompt "writer" "low" "evidence", HostPrompt "reviewer" "high" "proposal"]
+            =<< IORef.readIORef calls
+    , Tasty.HUnit.testCase "both branches check before any host call" do
+        calls <- IORef.newIORef (0 :: Int)
+        let handler (_ :: HostPrompt) _ = do
+                IORef.modifyIORef' calls (+ 1)
+                pure (Aeson.Number 1)
+        result <- Exception.try (runHosted handler []
+            "if true then (prompt{ model: \"m\", effort: \"low\", text: \"x\" } : Natural) else (prompt{ model: true, effort: \"low\", text: \"x\" } : Natural)")
+            :: IO (Either Infer.TypeInferenceError Natural)
+        case result of
+            Left (Infer.NotSubtype actual expected) -> do
+                Tasty.HUnit.assertEqual "bad argument" Monotype.Bool (Type.scalar actual)
+                Tasty.HUnit.assertEqual "required argument" Monotype.Text (Type.scalar expected)
+            Left err -> Tasty.HUnit.assertFailure (show err)
+            Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
+        Tasty.HUnit.assertEqual "no effects before typechecking" 0 =<< IORef.readIORef calls
+    , Tasty.HUnit.testCase "host JSON must satisfy the output type" do
+        let handler (_ :: HostPrompt) _ = pure (Aeson.String "wrong")
+        result <- Exception.try (runHosted handler []
+            "prompt{ model: \"m\", effort: \"low\", text: \"x\" } : Natural")
+            :: IO (Either Infer.TypeInferenceError Natural)
+        case result of
+            Left (Infer.NotSubtype actual expected) -> do
+                Tasty.HUnit.assertEqual "actual JSON type" Monotype.Text (Type.scalar actual)
+                Tasty.HUnit.assertEqual "requested type" Monotype.Natural (Type.scalar expected)
+            Left err -> Tasty.HUnit.assertFailure (show err)
+            Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
+    , Tasty.HUnit.testCase "nested scopes restore handlers with different argument types" do
+        let outer (_ :: HostPrompt) _ = pure (Aeson.Number 1)
+        let inner (_ :: Text) _ = pure (Aeson.Number 2)
+        let input = Code "(nested scope)" "prompt{ model: \"m\", effort: \"low\", text: \"x\" } : Natural"
+        let status = Grace.Status{ count = 0, context = [] }
+        values <- Grace.evalGrace input status (Grace.withPrompt outer do
+            (_, first) <- Interpret.interpretWith [] Nothing
+            second <- Grace.withPrompt inner (Reader.local
+                (\_ -> Code "(inner scope)" "prompt \"inner\" : Natural")
+                (snd <$> Interpret.interpretWith [] Nothing))
+            (_, third) <- Interpret.interpretWith [] Nothing
+            pure [Decode.decode first, Decode.decode second, Decode.decode third])
+        Tasty.HUnit.assertEqual "lexical scopes" [Right 1, Right 2, Right 1]
+            (values :: [Either Decode.DecodingError Natural])
+    , Tasty.HUnit.testCase "concurrent scopes do not share handlers" do
+        ready <- MVar.newEmptyMVar
+        gate <- MVar.newEmptyMVar
+        done <- MVar.newEmptyMVar
+        let handler value (_ :: HostPrompt) _ = do
+                MVar.putMVar ready ()
+                MVar.takeMVar gate
+                pure (Aeson.Number value)
+        let start value = Concurrent.forkIO do
+                result <- Exception.try (runHosted (handler value) []
+                    "prompt{ model: \"m\", effort: \"low\", text: \"x\" } : Natural")
+                    :: IO (Either SomeException Natural)
+                MVar.putMVar done result
+        first <- start 1
+        second <- start 2
+        outcome <- Exception.finally
+            (Timeout.timeout 5000000 do
+                MVar.takeMVar ready
+                MVar.takeMVar ready
+                MVar.putMVar gate ()
+                MVar.putMVar gate ()
+                results <- sequence [MVar.takeMVar done, MVar.takeMVar done]
+                pure (traverse (either (Left . Exception.displayException) Right) results))
+            (mapM_ Concurrent.killThread [first, second])
+        case outcome of
+            Just (Right values) -> Tasty.HUnit.assertEqual "independent answers" [1, 2] (List.sort values)
+            other -> Tasty.HUnit.assertFailure (show other)
+    , Tasty.HUnit.testCase "host interpreter refuses generated Grace code before calling" do
+        calls <- IORef.newIORef (0 :: Int)
+        let handler (_ :: Text) _ = do
+                IORef.modifyIORef' calls (+ 1)
+                pure (Aeson.Number 1)
+        result <- Exception.try (runHosted handler [] "import prompt \"generate code\" : Natural")
+            :: IO (Either Grace.UnsupportedPromptImport Natural)
+        case result of
+            Left Grace.UnsupportedPromptImport -> pure ()
+            Right _ -> Tasty.HUnit.assertFailure "Unexpected generated-code execution"
+        Tasty.HUnit.assertEqual "no call for generated code" 0 =<< IORef.readIORef calls
+    , Tasty.HUnit.testCase "missing output schema never falls back to the API interpreter" do
+        calls <- IORef.newIORef (0 :: Int)
+        let handler (_ :: Natural) _ = do
+                IORef.modifyIORef' calls (+ 1)
+                pure (Aeson.Number 1)
+        let input = Code "(missing schema)" ""
+        let status = Grace.Status{ count = 0, context = [] }
+        let expression = Syntax.Prompt
+                { location = Unknown, import_ = False, schema = Nothing
+                , arguments = Syntax.Scalar{ location = Unknown, scalar = Syntax.Natural 1 }
+                }
+        result <- Exception.try (Grace.evalGrace input status
+            (Grace.withPrompt handler (Normalize.evaluate [] expression)))
+            :: IO (Either Normalize.MissingSchema (Value.Value Location))
+        case result of
+            Left Normalize.MissingSchema -> pure ()
+            Right _ -> Tasty.HUnit.assertFailure "Unexpected success without a schema"
+        Tasty.HUnit.assertEqual "no call without a schema" 0 =<< IORef.readIORef calls
+    , Tasty.HUnit.testCase "default interpreter still requires an API key" do
+        result <- Exception.try (Interpret.load
+            (Code "(default prompt)" "prompt{ model: \"m\", text: \"x\" } : Natural"))
+            :: IO (Either Infer.TypeInferenceError Natural)
+        case result of
+            Left (Infer.RecordTypeMismatch _ _ fields) -> Tasty.HUnit.assertEqual "missing credential" ["key"] fields
+            Left err -> Tasty.HUnit.assertFailure (show err)
             Right value -> Tasty.HUnit.assertFailure ("Unexpected success: " <> show value)
     ]
 

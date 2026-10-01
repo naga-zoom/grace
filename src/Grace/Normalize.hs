@@ -29,7 +29,7 @@ import Grace.Decode (FromGrace(..))
 import Grace.HTTP (HTTP(..))
 import Grace.Input (Input(..), Mode(..))
 import Grace.Location (Location(..))
-import Grace.Monad (Grace, Status(..))
+import Grace.Monad (Grace, Status(..), MissingSchema(..))
 import Grace.Syntax (BindMonad(..), Builtin(..), Scalar(..), Syntax)
 import Grace.Value (Value)
 import Prelude hiding (lookup, null, succ)
@@ -57,6 +57,7 @@ import qualified Grace.GitHub as GitHub
 import qualified Grace.HTTP as HTTP
 import qualified Grace.Import as Import
 import qualified Grace.Infer as Infer
+import qualified Grace.Monad as Grace
 import qualified Grace.Monotype as Monotype
 import qualified Grace.Pretty as Pretty
 import qualified Grace.Prompt as Prompt
@@ -411,17 +412,24 @@ evaluate env₀ syntax₀ = do
                     _ -> error "Grace.Normalize.evaluate: if predicate must be a boolean value"
 
             Syntax.Prompt{ location, import_, arguments, schema } -> do
+                _ <- Grace.promptArgumentsType import_
                 newArguments <- loop env arguments
-
-                prompt <- case decode newArguments of
-                    Left exception -> Exception.throwIO exception
-                    Right prompt -> return prompt
 
                 Status{ context } <- State.get
 
                 let solvedSchema = fmap (Context.solveType context) schema
 
-                Prompt.prompt (generateContext env) import_ location prompt solvedSchema
+                hosted <- Grace.promptJSON newArguments solvedSchema
+
+                case hosted of
+                    Just (outputType, json) -> do
+                        value <- Infer.checkJSON outputType json
+                        pure (fmap (\_ -> location) value)
+                    Nothing -> do
+                        prompt <- case decode newArguments of
+                            Left exception -> Exception.throwIO exception
+                            Right prompt -> return prompt
+                        Prompt.prompt (generateContext env) import_ location prompt solvedSchema
 
             Syntax.HTTP{ schema = Nothing } -> do
                 Exception.throwIO MissingSchema
@@ -1004,11 +1012,3 @@ instance Exception MissingCredentials where
         "Missing credentials\n\
         \\n\
         \You need to provide API credentials in order to use the prompt keyword"
-
--- | Elaboration didn't infer a schema
-data MissingSchema = MissingSchema
-    deriving stock (Show)
-
-instance Exception MissingSchema where
-    displayException MissingSchema =
-        "Internal error - Elaboration failed to infer schema"
