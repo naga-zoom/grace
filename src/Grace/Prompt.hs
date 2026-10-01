@@ -9,6 +9,7 @@ module Grace.Prompt
       Prompt(..)
     , Effort(..)
     , prompt
+    , toJSONSchema
 
       -- * Exceptions
     , UnsupportedModelOutput(..)
