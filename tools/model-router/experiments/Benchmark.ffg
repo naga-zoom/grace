@@ -1,0 +1,23 @@
+# Reuse the actual candidate workflow. No copied stages or routing engine.
+let profile = ./Profile.ffg
+let workflow = ../workflow.ffg
+in workflow
+  { baseline: "XS"
+  , profiles: [ { size: "XS", model: profile.model, effort: profile.effort, modelVersion: null : Optional Text } ]
+  , catalog: input.catalog
+  , observations: [] : List
+      { runId: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text
+      , role: Text, taskCohort: Text, workflowCohort: Text
+      , contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+      , verifier: Text, wholeWorkflowQuality: Text, independentGate: Text
+      , measurements: { wholeWorkflowTokens: Optional Natural, wholeWorkflowCost: Optional Real, wholeWorkflowSeconds: Optional Real }
+      }
+  }
+  { taskCohort: "synthetic-extraction", workflowCohort: "native-abba"
+  , contextProtocol: "raw-context-selection-v1", qualityProtocol: "exact-extraction-oracle-v1"
+  , trialEpoch: null : Optional Text
+  , goal: input.task.goal, acceptanceCriteria: input.task.acceptanceCriteria
+  , negativeEvidence: input.task.negativeEvidence, sourcePackets: input.task.sourcePackets
+  # Required IDs never enter the planning payload. This is the sole variant.
+  , requiredSourceIds: if input.selected then ["registry-active"] else map (\packet -> packet.id) input.task.sourcePackets
+  }

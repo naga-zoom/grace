@@ -1,0 +1,3 @@
+# Deliberately wrong behavioral control; never an adopted policy.
+\configuration -> \task ->
+  Routed { size: configuration.baseline, model: "fixture-expert", modelVersion: "fixture-v1", effort: "high", source: "baseline" }

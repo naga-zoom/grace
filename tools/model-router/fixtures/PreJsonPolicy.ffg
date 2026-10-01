@@ -1,0 +1,107 @@
+# Candidate only. Configuration is trusted host data; never model output.
+# The filter is the three-line implementation from Grace prelude/list/select.ffg.
+\(configuration :
+  { baseline: Text
+  , profiles: List { size: Text, model: Text, modelVersion: Text, effort: Text }
+  , catalog: List { model: Text, modelVersion: Text, efforts: List Text }
+  , observations: List
+      { runId: Text, size: Text, model: Text, modelVersion: Text, effort: Text
+      , role: Text, taskCohort: Text, workflowCohort: Text
+      , contextProtocol: Text, qualityProtocol: Text
+      , verifier: < Passed: { } | Failed: { } | Unknown: { } >
+      , wholeWorkflowQuality: < Passed: { } | Failed: { } | Unknown: { } >
+      , independentGate: < Passed: { } | Failed: { } | Unknown: { } >
+      , measurements:
+          { wholeWorkflowTokens: Optional Natural
+          , wholeWorkflowCost: Optional Real
+          , wholeWorkflowSeconds: Optional Real
+          }
+      }
+  }) ->
+\(task : { role: Text, taskCohort: Text, workflowCohort: Text, contextProtocol: Text, qualityProtocol: Text }) ->
+let select : forall (a : Type) . (a -> Bool) -> List a -> List a
+      = \predicate -> fold { cons: \x -> \xs -> if predicate x then [ x ] + xs else xs, nil: [ ] }
+let any : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x || rest, nil: false }
+let all : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x && rest, nil: true }
+let count : forall (a : Type) . List a -> Natural
+      = fold { cons: \_ -> \rest -> rest + 1, nil: 0 }
+let passed = fold { Passed: \_ -> true, Failed: \_ -> false, Unknown: \_ -> false }
+let present = fold { some: \_ -> true, null: false }
+let nonnegative = fold { some: \value -> value >= 0.0, null: false }
+let supported = \(profile : { size: Text, model: Text, modelVersion: Text, effort: Text }) ->
+      profile.model != "" && profile.modelVersion != "" && profile.effort != ""
+      && any (\size -> size == profile.size) [ "XS", "S", "M", "L", "XL" ]
+      && any (\(entry : { model: Text, modelVersion: Text, efforts: List Text }) ->
+          entry.model == profile.model && entry.modelVersion == profile.modelVersion
+          && any (\effort -> effort == profile.effort) entry.efforts)
+        configuration.catalog
+let ambiguous = any
+      (\(profile : { size: Text }) -> count (select (\other -> other.size == profile.size) configuration.profiles) != 1)
+      configuration.profiles
+let sameScope = \(profile : { size: Text, model: Text, modelVersion: Text, effort: Text }) -> \row ->
+      row.taskCohort != "" && row.workflowCohort != "" && row.contextProtocol != "" && row.qualityProtocol != ""
+      && row.size == profile.size && row.model == profile.model
+      && row.modelVersion == profile.modelVersion && row.effort == profile.effort
+      && row.role == task.role && row.taskCohort == task.taskCohort
+      && row.workflowCohort == task.workflowCohort
+      && row.contextProtocol == task.contextProtocol && row.qualityProtocol == task.qualityProtocol
+let rows = \profile -> select (sameScope profile) configuration.observations
+let runIds = \profile -> map (\row -> row.runId) (rows profile)
+let summarize = \profile ->
+      let matched = rows profile
+      in fold
+        { nil: { count: 0.0, cost: 0.0, tokens: 0.0, seconds: 0.0, valid: true }
+        , cons: \row -> \rest ->
+            { count: rest.count + 1.0
+            , cost: fold { some: \cost -> cost + rest.cost, null: rest.cost } row.measurements.wholeWorkflowCost
+            , tokens: fold { some: \tokens -> tokens + rest.tokens, null: rest.tokens } row.measurements.wholeWorkflowTokens
+            , seconds: fold { some: \seconds -> seconds + rest.seconds, null: rest.seconds } row.measurements.wholeWorkflowSeconds
+            , valid: rest.valid && row.runId != ""
+                && count (select (\other -> other.runId == row.runId) matched) == 1
+                && passed row.verifier && passed row.wholeWorkflowQuality && passed row.independentGate
+                && present row.measurements.wholeWorkflowTokens
+                && nonnegative row.measurements.wholeWorkflowCost && nonnegative row.measurements.wholeWorkflowSeconds
+            }
+        }
+        matched
+let route = \source -> \profile -> Routed
+      { size: profile.size, model: profile.model, modelVersion: profile.modelVersion, effort: profile.effort, source }
+let choose = \base ->
+      let baselineSummary = summarize base
+      let paired = \profile ->
+            count (runIds profile) == count (runIds base)
+            && all (\(runId : Text) -> any (\(baselineId : Text) -> baselineId == runId) (runIds base)) (runIds profile)
+      let candidates = map (\profile -> { profile, summary: summarize profile }) configuration.profiles
+      let eligible = select
+            (\candidate -> baselineSummary.valid && baselineSummary.count > 0.0
+                && candidate.summary.valid && candidate.summary.count > 0.0 && paired candidate.profile
+                && candidate.summary.cost * baselineSummary.count < baselineSummary.cost * candidate.summary.count
+                && candidate.summary.tokens * baselineSummary.count < baselineSummary.tokens * candidate.summary.count
+                && candidate.summary.seconds * baselineSummary.count < baselineSummary.seconds * candidate.summary.count)
+            candidates
+      # All matched runs contribute; no cached/reasoning subset is subtracted or counted twice.
+      # Equality retains baseline. Equal qualifying candidates retain trusted catalog order.
+      let cheapest = fold
+            { nil: null
+            , cons: \candidate -> \rest -> fold
+                { null: some candidate
+                , some: \other ->
+                    if candidate.summary.cost * other.summary.count <= other.summary.cost * candidate.summary.count
+                    then some candidate else some other
+                }
+                rest
+            }
+            eligible
+      in fold { null: route "baseline" base, some: \candidate -> route "observed" candidate.profile } cheapest
+let baselines = select (\profile -> profile.size == configuration.baseline) configuration.profiles
+in
+  if any (\role -> role == task.role) [ "planning", "orchestration", "execution", "verification" ]
+  then if ambiguous then Refused { reason: "Ambiguous profile size mapping" }
+       else if all supported configuration.profiles
+       then if count baselines == 1
+            then fold { nil: Refused { reason: "Unsupported baseline profile" }, cons: \base -> \_ -> choose base } baselines
+            else Refused { reason: "Unsupported baseline profile" }
+       else Refused { reason: "Unsupported host profile mapping" }
+  else Refused { reason: "Unsupported workflow role" }

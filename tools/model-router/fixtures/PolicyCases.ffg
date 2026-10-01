@@ -1,0 +1,108 @@
+# All catalogs, held-out gates and measurements below are SYNTHETIC test data.
+\policy ->
+let profileS = { size: "S", model: "fixture-small", modelVersion: some "fixture-v1", effort: "low" }
+let profileM = { size: "M", model: "fixture-middle", modelVersion: some "fixture-v1", effort: "medium" }
+let profileL = { size: "L", model: "fixture-expert", modelVersion: some "fixture-v1", effort: "high" }
+let catalog =
+      [ { model: "fixture-small", modelVersion: some "fixture-v1", efforts: [ "low" ] }
+      , { model: "fixture-middle", modelVersion: some "fixture-v1", efforts: [ "medium" ] }
+      , { model: "fixture-expert", modelVersion: some "fixture-v1", efforts: [ "high" ] }
+      ]
+let task = { role: "execution", taskCohort: "parser", workflowCohort: "paired-parser", contextProtocol: "packet-v1", qualityProtocol: "objective-v1", trialEpoch: some "fixture-epoch-1" }
+let row = \(settings :
+      { runId: Text, size: Text, role: Text
+      , verifier: Text
+      , quality: Text
+      , gate: Text
+      , cost: Optional Real, tokens: Optional Natural, seconds: Optional Real
+      }) ->
+      { runId: settings.runId, size: settings.size
+      , model: if settings.size == "S" then "fixture-small" else if settings.size == "M" then "fixture-middle" else "fixture-expert"
+      , modelVersion: some "fixture-v1"
+      , effort: if settings.size == "S" then "low" else if settings.size == "M" then "medium" else "high"
+      , role: settings.role, taskCohort: "parser", workflowCohort: "paired-parser"
+      , contextProtocol: "packet-v1", qualityProtocol: "objective-v1", trialEpoch: some "fixture-epoch-1"
+      , verifier: settings.verifier, wholeWorkflowQuality: settings.quality, independentGate: settings.gate
+      , measurements: { wholeWorkflowTokens: settings.tokens, wholeWorkflowCost: settings.cost, wholeWorkflowSeconds: settings.seconds }
+      }
+let observation = \(runId : Text) -> \(size : Text) -> \(cost : Real) ->
+      row { runId, size, role: "execution", verifier: "passed", quality: "passed", gate: "passed", cost: some cost, tokens: some (if size == "L" then 600 else 200), seconds: some (if size == "L" then 30.0 else 10.0) }
+let bad = \verifier -> \quality -> \gate -> \tokens -> \cost -> \seconds ->
+      row { runId: "trial-1", size: "S", role: "execution", verifier, quality, gate, tokens, cost, seconds }
+let config = \rows -> { baseline: "L", profiles: [ profileS, profileM, profileL ], catalog, observations: rows }
+let describe = fold { Routed: \route -> { status: "routed", size: route.size, source: route.source }, Refused: \_ -> { status: "refused", size: "", source: "" } }
+let baseline = { status: "routed", size: "L", source: "baseline" }
+let empiricalS = { status: "routed", size: "S", source: "observed" }
+let refusal = { status: "refused", size: "", source: "" }
+let sampleS = observation "trial-1" "S" 1.0
+let sampleM = observation "trial-1" "M" 1.0
+let sampleL = observation "trial-1" "L" 3.0
+let failed = bad "failed" "passed" "passed" (some 200) (some 1.0) (some 10.0)
+let rejected = bad "passed" "failed" "passed" (some 200) (some 1.0) (some 10.0)
+let unknown = bad "unknown" "passed" "passed" (some 200) (some 1.0) (some 10.0)
+let ungated = bad "passed" "passed" "unknown" (some 200) (some 1.0) (some 10.0)
+let missingTokens = bad "passed" "passed" "passed" null (some 1.0) (some 10.0)
+let missingCost = bad "passed" "passed" "passed" (some 200) null (some 10.0)
+let missingSeconds = bad "passed" "passed" "passed" (some 200) (some 1.0) null
+let negative = bad "passed" "passed" "passed" (some 200) (some (-1.0)) (some 10.0)
+let failedSecond = row { runId: "trial-2", size: "S", role: "execution", verifier: "failed", quality: "passed", gate: "passed", tokens: some 200, cost: some 1.0, seconds: some 10.0 }
+let wrongRole = row { runId: "trial-1", size: "S", role: "planning", verifier: "passed", quality: "passed", gate: "passed", tokens: some 200, cost: some 1.0, seconds: some 10.0 }
+let wrongContext = { role: "execution", taskCohort: "parser", workflowCohort: "paired-parser", contextProtocol: "packet-v2", qualityProtocol: "objective-v1", trialEpoch: some "fixture-epoch-1" }
+let wrongCohort = { role: "execution", taskCohort: "sql", workflowCohort: "paired-parser", contextProtocol: "packet-v1", qualityProtocol: "objective-v1", trialEpoch: some "fixture-epoch-1" }
+let wrongQuality = { role: "execution", taskCohort: "parser", workflowCohort: "paired-parser", contextProtocol: "packet-v1", qualityProtocol: "other-objective", trialEpoch: some "fixture-epoch-1" }
+let wrongWorkflow = { role: "execution", taskCohort: "parser", workflowCohort: "other-workflow", contextProtocol: "packet-v1", qualityProtocol: "objective-v1", trialEpoch: some "fixture-epoch-1" }
+let unsupported = { baseline: "XL", profiles: [ profileS, profileL ], catalog, observations: [ ] }
+let stale = { baseline: "L", profiles: [ profileS, profileL ], catalog: [ { model: "fixture-small", modelVersion: some "fixture-v1", efforts: [ "low" ] } ], observations: [ ] }
+let duplicate = { baseline: "L", profiles: [ profileL, { size: "L", model: "fixture-small", modelVersion: some "fixture-v1", effort: "low" } ], catalog, observations: [ ] }
+let unknownBaseline =
+      { baseline: "L", profiles: [ { size: "L", model: "fixture-expert", modelVersion: null, effort: "high" } ]
+      , catalog: [ { model: "fixture-expert", modelVersion: null, efforts: [ "high" ] } ], observations: [ ] }
+let boundaryRow = \runId -> \version -> \epoch -> \verifier ->
+      let original = observation runId "S" 1.0
+      in { runId, size: original.size, model: original.model, modelVersion: version, effort: original.effort
+         , role: original.role, taskCohort: original.taskCohort, workflowCohort: original.workflowCohort
+         , contextProtocol: original.contextProtocol, qualityProtocol: original.qualityProtocol, trialEpoch: epoch
+         , verifier, wholeWorkflowQuality: original.wholeWorkflowQuality, independentGate: original.independentGate, measurements: original.measurements }
+let unknownRevision = boundaryRow "trial-2" null (some "fixture-epoch-1") "passed"
+let unknownEpoch = boundaryRow "trial-2" (some "fixture-v1") null "passed"
+let misspelled = boundaryRow "trial-2" (some "fixture-v1") (some "fixture-epoch-1") "Passed"
+let failedBaseline = row { runId: "trial-1", size: "L", role: "execution", verifier: "passed", quality: "failed", gate: "passed", cost: some 3.0, tokens: some 600, seconds: some 30.0 }
+in
+  [ { name: "empty table baseline", actual: describe (policy (config [ ]) task), expected: baseline }
+  , { name: "matched paired observations select lower total cost", actual: describe (policy (config [ sampleL, sampleS ]) task), expected: empiricalS }
+  , { name: "missing baseline observations retain baseline", actual: describe (policy (config [ sampleS ]) task), expected: baseline }
+  , { name: "role mismatch baseline", actual: describe (policy (config [ sampleL, wrongRole ]) task), expected: baseline }
+  , { name: "cohort mismatch baseline", actual: describe (policy (config [ sampleL, sampleS ]) wrongCohort), expected: baseline }
+  , { name: "context mismatch baseline", actual: describe (policy (config [ sampleL, sampleS ]) wrongContext), expected: baseline }
+  , { name: "quality protocol mismatch baseline", actual: describe (policy (config [ sampleL, sampleS ]) wrongQuality), expected: baseline }
+  , { name: "workflow cohort mismatch baseline", actual: describe (policy (config [ sampleL, sampleS ]) wrongWorkflow), expected: baseline }
+  , { name: "verifier failure baseline", actual: describe (policy (config [ sampleL, failed ]) task), expected: baseline }
+  , { name: "rejected whole workflow quality baseline", actual: describe (policy (config [ sampleL, rejected ]) task), expected: baseline }
+  , { name: "unknown verifier baseline", actual: describe (policy (config [ sampleL, unknown ]) task), expected: baseline }
+  , { name: "independent held out gate absent baseline", actual: describe (policy (config [ sampleL, ungated ]) task), expected: baseline }
+  , { name: "missing tokens baseline", actual: describe (policy (config [ sampleL, missingTokens ]) task), expected: baseline }
+  , { name: "missing cost baseline", actual: describe (policy (config [ sampleL, missingCost ]) task), expected: baseline }
+  , { name: "missing seconds baseline", actual: describe (policy (config [ sampleL, missingSeconds ]) task), expected: baseline }
+  , { name: "negative cost baseline", actual: describe (policy (config [ sampleL, negative ]) task), expected: baseline }
+  , { name: "one pass one failure cannot cherry pick", actual: describe (policy (config [ sampleL, observation "trial-2" "L" 3.0, sampleS, failedSecond ]) task), expected: baseline }
+  , { name: "failure order invariant", actual: describe (policy (config [ failedSecond, sampleS, observation "trial-2" "L" 3.0, sampleL ]) task), expected: baseline }
+  , { name: "tie uses catalog order", actual: describe (policy (config [ sampleM, sampleL, sampleS ]) task), expected: empiricalS }
+  , { name: "tie row order invariant", actual: describe (policy (config [ sampleS, sampleL, sampleM ]) task), expected: empiricalS }
+  , { name: "all trials count, cheapest success not cherry picked", actual: describe (policy (config [ sampleS, observation "trial-2" "S" 9.0, sampleL, observation "trial-2" "L" 3.0 ]) task), expected: baseline }
+  , { name: "different run sets baseline", actual: describe (policy (config [ sampleS, observation "different-trial" "L" 3.0 ]) task), expected: baseline }
+  , { name: "duplicate run cannot double count", actual: describe (policy (config [ sampleL, sampleS, sampleS ]) task), expected: baseline }
+  , { name: "equal cost baseline", actual: describe (policy (config [ sampleL, observation "trial-1" "S" 3.0 ]) task), expected: baseline }
+  , { name: "no token improvement baseline", actual: describe (policy (config [ sampleL, bad "passed" "passed" "passed" (some 600) (some 1.0) (some 10.0) ]) task), expected: baseline }
+  , { name: "no productivity improvement baseline", actual: describe (policy (config [ sampleL, bad "passed" "passed" "passed" (some 200) (some 1.0) (some 30.0) ]) task), expected: baseline }
+  , { name: "unsupported profile refuses", actual: describe (policy unsupported task), expected: refusal }
+  , { name: "unsupported host mapping refuses", actual: describe (policy stale task), expected: refusal }
+  , { name: "duplicate size to different mapping refuses", actual: describe (policy duplicate task), expected: refusal }
+  , { name: "unknown live model revision baseline allowed", actual: describe (policy unknownBaseline task), expected: baseline }
+  , { name: "unknown revision cannot cherry pick passed trial", actual: describe (policy (config [ sampleL, sampleS, unknownRevision ]) task), expected: baseline }
+  , { name: "unknown epoch cannot cherry pick passed trial", actual: describe (policy (config [ sampleL, sampleS, unknownEpoch ]) task), expected: baseline }
+  , { name: "invalid status cannot drop bad matched row", actual: describe (policy (config [ sampleL, sampleS, misspelled ]) task), expected: baseline }
+  , { name: "JSON trusted evidence table boundary", actual: describe (policy (read (show (config [ sampleL, sampleS ]))) task), expected: empiricalS }
+  , { name: "failed baseline quality cannot authorize improvement", actual: describe (policy (config [ failedBaseline, sampleS ]) task), expected: baseline }
+  , { name: "empty revision cannot disappear from matched trials", actual: describe (policy (config [ sampleL, sampleS, boundaryRow "trial-2" (some "") (some "fixture-epoch-1") "passed" ]) task), expected: baseline }
+  , { name: "empty epoch cannot disappear from matched trials", actual: describe (policy (config [ sampleL, sampleS, boundaryRow "trial-2" (some "fixture-v1") (some "") "passed" ]) task), expected: baseline }
+  ]

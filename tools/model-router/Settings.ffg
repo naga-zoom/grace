@@ -1,0 +1,22 @@
+# Candidate/unadopted native Codex mapping. Availability is checked at runtime;
+# availability does not establish task capability, quality or token savings.
+# L/high remains the explicit conservative baseline. Other sizes are unmapped.
+# Model aliases have no verified immutable revision. Empty observations and
+# unknown trial epoch cannot authorize learned-route promotion.
+{ configuration:
+    { baseline: "L"
+    , profiles: [ { size: "L", model: "gpt-5.6-sol", modelVersion: null : Optional Text, effort: "high" } ]
+    , observations: [ ] : List
+        { runId: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text
+        , role: Text, taskCohort: Text, workflowCohort: Text
+        , contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+        , verifier: Text, wholeWorkflowQuality: Text, independentGate: Text
+        , measurements: { wholeWorkflowTokens: Optional Natural, wholeWorkflowCost: Optional Real, wholeWorkflowSeconds: Optional Real }
+        }
+    }
+, scope:
+    { taskCohort: "unclassified", workflowCohort: "native-candidate"
+    , contextProtocol: "packet-v1", qualityProtocol: "objective-v1"
+    , trialEpoch: null : Optional Text
+    }
+}

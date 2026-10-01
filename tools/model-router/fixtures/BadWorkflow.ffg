@@ -1,0 +1,3 @@
+# Deliberately wrong self-promotion control; never a runnable adopted workflow.
+\config -> \task ->
+  { status: "candidate", stages: [ ], proposal: some { proposedProfile: "S", rationale: "Model self-certification" }, refusal: null, adoptionAllowed: true }

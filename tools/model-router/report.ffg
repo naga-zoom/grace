@@ -1,0 +1,82 @@
+# Evidence report. No routing candidate has been adopted.
+let report =
+      { status: "Unadopted; narrow same-workflow token savings measured, full acceptance failed on latency"
+      , architecture:
+          { workflow: [ "planning", "orchestration", "execution", "verification" ]
+          , policy: "Grace records and table views; no construct-name complexity whitelist"
+          , runtime: "Haskell extends Grace with typed host primitives and native transport"
+          , models: "T-shirt profiles mapped explicitly to the current host catalog"
+          , bootstrap: "Empty learned tables retain conservative correctness requirements"
+          , mutation: "Verifier proposes a candidate; independent held-out evidence gates activation"
+          , context: "Source-linked packets preserve failures, contradictions and unresolved dependencies"
+          }
+      , evidence:
+          { interpreter:
+              { repository: "https://github.com/naga-zoom/grace"
+              , locationsAndBranches: "36f4b4e"
+              , typedHostPrompt: "2d004b4"
+              , inequality: "e5d218f"
+              , tests: 521
+              , doctests: 131
+              , log: "/tmp/grace-inequality-full-20261001.log"
+              , scope: "Typed arguments and results, selected runtime branches, nested and concurrent handler isolation"
+              , boundary: "Decoded Haskell callbacks do not capture the handler; apply Grace lambdas within its scope"
+              }
+          , nativeProbe:
+              { status: "One completed native Codex app-server inference"
+              , model: "gpt-5.6-luna"
+              , effort: "low"
+              , inputTokens: 29173
+              , cachedInputTokens: 0
+              , outputTokens: 15
+              , totalTokens: 29188
+              , log: "/tmp/grace-codex-host-probe-20261001.log"
+              , interpretation: "Transport works; inherited harness overhead makes this insufficient evidence of efficiency"
+              }
+          , candidate:
+              { protocolTests: 28
+              , policyCases: 37
+              , workflowChecks: 12
+              , mcpBoundaryTests: 6
+              , independentlyRerun: true
+              , context: "Required raw packets, plan, acceptance criteria and negative evidence survive; irrelevant packets are absent downstream; unknown IDs refuse"
+              , controls: "Before-fix and mutation controls expose missing handoff facts, self-certification and dropped unknown/failed observations"
+              , settings: "Trusted bundled Settings.ffg and shared Entry.ffg provide model/effort mappings and scope to CLI and MCP; no mandatory CONFIG/SCOPE JSON. Task-supplied routing overrides refuse"
+              , catalog: "Exact model/effort mapping is checked against current catalog availability only; availability proves neither capability nor quality"
+              , limitation: "Native aliases have no immutable model revision; current strict guard therefore retains baseline. Bounded-epoch learning is a proposal only; aliases/immutable guard and cancellation/timeout behavior remain untested"
+              , protocol: "Five SDK stdio requests, zero native attempts; CLI and MCP outputs match and adoption remains false"
+              , adoptionAllowed: false
+              }
+          , pairedExperiment:
+              { status: "Experimental AB/BA comparison on one same-four-stage workflow fixture; not a policy-qualifying evaluation"
+              , fixtureObjective: "All four runs passed the same fixture objective; this is not a broad quality or Haskell capability claim"
+              , pairAB: { order: "A then B", aTokens: 95616, bTokens: 80135, aSeconds: 22.716, bSeconds: 22.963 }
+              , pairBA: { order: "B then A", aTokens: 94985, bTokens: 79711, aSeconds: 22.574, bSeconds: 27.955 }
+              , totals:
+                  { nativeTurns: 16, totalTokens: 350447, inputTokens: 349004, outputTokens: 1443
+                  , cachedInputTokens: 19968, reasoningOutputTokens: 828
+                  , subsets: "Cached input is included in input tokens; reasoning output is included in output tokens"
+                  }
+              , integrity: "No retries or missing usage; report.ffg denial equality passed (/tmp/grace-benchmark-report-verify.log)"
+              , limitations: "Same four-stage workflow only, not single-call or deterministic baseline; no pricing, human-review cost, immutable model revision, or harness-only decomposition; no learned rows and no adoption"
+              , policy: "Experimental acceptance failed latency. Production policy also requires lower whole-workflow cost and immutable-revision evidence; cost is unknown and the alias guard prevents promotion"
+              , log: "experiments/results-20261002-abba-1/counters.json"
+              }
+          }
+      , learnedTables:
+          { planner: [ ] : List Text
+          , orchestrator: [ ] : List Text
+          , executor: [ ] : List Text
+          , verifier: [ ] : List Text
+          }
+      , acceptance:
+          { quality: "Pinned held-out tasks, objective checks and independent semantic review; retain all failures"
+          , cost: "Paired baseline versus routing; count context preparation, dispatch, attempts and review"
+          , usage: "Final authoritative counters only; cached input is a subset of input; missing counters remain unknown"
+          , activation: "For matched paired run sets, require valid PASSED verifier, whole-workflow quality and independent gates, plus strict lower aggregate whole-workflow cost, tokens and elapsed seconds. This fixture lowered tokens but increased latency and lacks cost data, so it does not qualify"
+          , pending: [ "Replicated paired benchmarks with full acceptance gates", "Pricing and independent-review cost", "Core-task coverage and measured calibration applicability for alias-only catalogs", "Activation and production publication" ]
+          }
+      , historical: "The superseded Python prototype is retained outside this canonical Grace/Haskell bundle; it is not used"
+      , productionSwap: "None"
+      }
+in show report

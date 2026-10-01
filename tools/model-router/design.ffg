@@ -1,0 +1,77 @@
+# Inspectable candidate with one narrow measured fixture; unadopted and not qualified.
+let design =
+      { status: "Native bridge and Grace policy verified locally; same-workflow token reduction measured once, latency gate failed; not adopted"
+      , owner: "Grace owns planning, orchestration, execution decisions and verification"
+      , implementation: "Haskell extends the Grace interpreter only; no separate policy engine"
+      , existing:
+          { composition: [ "let chaining", "map", "fold", "records", "list.select", "list.reject" ]
+          , prompting: "Typed prompt results and explicit history already exist"
+          , transport: "Typed HTTP GET/POST exists; scoped host prompting now dispatches through the installed native Codex app-server"
+          }
+      , learnedTables:
+          { orchestrator: [ ] : List Text
+          , planner: [ ] : List Text
+          , executor: [ ] : List Text
+          , verifier: [ ] : List Text
+          }
+      , routing:
+          { representation: "One shared evidence table with four role views; native records and list folds"
+          , bootstrap: "Empty learned tables; explicit conservative constraints govern unknown work"
+          , assessment: "Task scope, semantic uncertainty, dependency breadth and available verification; no construct-name whitelist"
+          , indicator: "Observed likelihood that a particular model/effort/context configuration satisfies this task's acceptance criteria, with uncertainty"
+          , bootstrapAssessment: "Higher-capability assessment proposes task cohorts and candidate configurations; it does not establish correctness"
+          , empiricalRows: "Role and task cohort plus model version, effort and context protocol map to held-out quality evidence and total workflow usage"
+          , selection: "Choose the least-cost tested configuration satisfying quality constraints; unknown or conflicting evidence retains the conservative baseline"
+          , evaluator: "Check objective outcomes first, then independent semantic review and sampled human audits; assess the evaluator using known counterexamples"
+          , calibration: "Use distinct held-out tasks, record failures and uncertainty, and do not treat repeated runs of one task as broad coverage"
+          , profiles: "T-shirt profiles mapped to the current host's available models and effort; no cross-provider fallback"
+          , context: "Source-linked packets retain failures, contradictions and uncertainty; invalidate on relevant source changes"
+          , promotion: "Verifier proposes changes; independent checks and measured paired trials gate activation"
+          }
+      , prerequisite:
+          { issue: "Current evaluator executes both if branches"
+          , reproduction: "show (if true then 1 else (read \"{\" : Natural))"
+          , observed: "Unselected branch raises a JSON decoding error"
+          , correction: "Typecheck both branches; evaluate only the selected branch"
+          , boundary: "Static imports can still resolve during inference; the fix suppresses unselected runtime effects"
+          , verification: "Fail-first branch tests, nested and negative cases, then full Grace suite"
+          , regression: "Five focused tests pass after three reproduce the original failure; independent semantic review found no blockers"
+          , baseline: "The original 21 supposed missing error goldens were valid-code StrictData/source-location crashes, now repaired. One JSON diagnostic reflects installed Aeson 2.2.5.1."
+          , finalSuites: "Tasty 521/521 and doctest 131/131 pass, including source-location-independent inequality; no production swap"
+          }
+      , extension:
+          { primitive: "Interpret the existing typed prompt with a scoped host handler; no second prompt AST"
+          , responsibility: "Dispatch the selected configured host profile and return checked output plus authoritative observations"
+          , boundary: "Runtime resolves host profiles and enforces inherited permissions; Grace selects profiles and handles typed outcomes"
+          , errors: "Unsupported host or profile, transport failure and invalid output remain distinct outcomes"
+          , usage: "Runtime observations include all attempts; missing counters remain unknown, never model-authored"
+          , privacy: "Credentials, commands and transport endpoints stay inside the runtime"
+          , verification: "28 native protocol tests, 6 MCP boundary tests, 37 Grace policy cases and 12 workflow checks pass (/tmp/grace-root-reviewed-final-20261001.log); before-fix and mutation controls fail as intended"
+          , applicability: "Native model aliases lack immutable revisions. Current strict empirical guard retains baseline; bounded-epoch learning is proposal only"
+          , bundledSettings: "Trusted bundled Settings.ffg and shared Entry.ffg supply mappings and scope to CLI and MCP; no mandatory CONFIG/SCOPE JSON. Task-supplied routing overrides refuse. Exact L/high is checked for catalog availability only"
+          , mcpBoundary: "Five SDK stdio requests, zero native attempts; CLI and MCP outputs match; adoption remains false (/tmp/grace-bundled-settings-stdio.log)"
+          , remainingLimits: "One same-four-stage native paired fixture only: no single-call/deterministic comparison, pricing, human-review cost, immutable model revision or harness-only decomposition. Alias/immutable guard, cancellation and timeout behavior remain untested"
+          , constraint: "Direct access to this chat's collaboration dispatcher remains unavailable. Installed Codex 0.144.5 app-server completed one native Luna/low turn: 29173 input, 15 output, zero cached input. Its catalog lists 5.6/5.5 models, unlike this desktop host's exposed 6-series catalog; do not assume identical availability or routing gains."
+          , deferred: "Generic MCP client/discovery is unnecessary until a concrete host tool requires it"
+          }
+      , evaluation:
+          { tools:
+              { ghc: "Compiler diagnostics, inferred types and compile timings for runtime implementation"
+              , stack: "Reproducible builds and existing complete test suite"
+              , hls: "Interactive diagnostics, signatures and navigation when compatible"
+              , ghcid: "Optional local compile feedback when installed"
+              , grace: "Grace program typechecking, typed decoding and workflow behavior"
+              }
+          , interpretation: "Compiler evidence is not an oracle for task difficulty or semantic correctness"
+          , observedToolchain:
+              { project: "Glean Stack nightly-2026-09-08 resolves Grace to GHC 9.12.4"
+              , ghcFlags: [ "-fdiagnostics-as-json", "-ddump-types", "-ddump-timings", "-fno-code" ]
+              , hls: "Wrapper probe identifies project GHC 9.12.4; installed matching server fails to start because a text dylib is missing"
+              , ghcid: "Not installed; no installation needed for current Stack verification"
+              }
+          , benchmark: "One AB/BA same-four-stage fixture, 16 native turns, all without retries or missing usage. A→B: 95,616→80,135 tokens and 22.716→22.963 seconds; B→A: 94,985→79,711 tokens and 22.574→27.955 seconds. All four same-fixture objectives passed; full policy gate failed latency. Aggregate 350,447 total = 349,004 input + 1,443 output; 19,968 cached-input and 828 reasoning-output are subsets. See experiments/results-20261002-abba-1/counters.json"
+          , counters: "Cached input is a subset of input; reasoning output is a subset of output; use final cumulative usage without double-counting"
+          , adoption: "Narrow same-workflow token savings measured, but latency increased, pricing and review cost are unknown, and the full policy gate failed; router remains unadopted with no learned rows. Policy eligibility still requires paired run IDs, passed verifier, whole-workflow quality and independent gates, and strictly lower aggregate whole-workflow cost, tokens and elapsed seconds. No broad quality or Haskell capability claim"
+          }
+      }
+in show design

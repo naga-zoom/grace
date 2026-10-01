@@ -1,0 +1,21 @@
+# Shared CLI/MCP entry. Mappings, observations, scope and workflow are Grace.
+# The interpreter supplies the actual native catalog; callers supply task data.
+let settings = ./Settings.ffg
+let workflow = ./workflow.ffg
+in workflow
+  { baseline: settings.configuration.baseline
+  , profiles: settings.configuration.profiles
+  , observations: settings.configuration.observations
+  , catalog: input.catalog
+  }
+  { taskCohort: settings.scope.taskCohort
+  , workflowCohort: settings.scope.workflowCohort
+  , contextProtocol: settings.scope.contextProtocol
+  , qualityProtocol: settings.scope.qualityProtocol
+  , trialEpoch: settings.scope.trialEpoch
+  , goal: input.task.goal
+  , acceptanceCriteria: input.task.acceptanceCriteria
+  , negativeEvidence: input.task.negativeEvidence
+  , sourcePackets: input.task.sourcePackets
+  , requiredSourceIds: input.task.requiredSourceIds
+  }

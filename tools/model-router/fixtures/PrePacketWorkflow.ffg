@@ -1,0 +1,61 @@
+# Candidate workflow. The host supplies the trusted configuration; prompt outputs
+# cannot update its observations or independently-run promotion gates.
+\configuration ->
+\(task : { taskCohort: Text, workflowCohort: Text, contextProtocol: Text, qualityProtocol: Text, text: Text }) ->
+let policy = ./PreJsonPolicy.ffg
+let choose = \(role : Text) -> policy configuration
+      { role, taskCohort: task.taskCohort, workflowCohort: task.workflowCohort
+      , contextProtocol: task.contextProtocol, qualityProtocol: task.qualityProtocol
+      }
+let dispatch = \(role : Text) -> \(previous : Text) ->
+      fold
+        { Refused: \error -> Refused error
+        , Routed: \decision ->
+            let response = prompt
+                  { model: decision.model, effort: decision.effort
+                  , text: show { role, task, previous }
+                  } : { reply: Text }
+            in Answered { decision, reply: response.reply }
+        }
+        (choose role)
+let bind = \outcome -> \continuation ->
+      fold { Refused: \error -> Refused error, Answered: continuation } outcome
+let stage = \(role : Text) -> \answer ->
+      { role, size: answer.decision.size, model: answer.decision.model
+      , modelVersion: answer.decision.modelVersion, effort: answer.decision.effort
+      , source: answer.decision.source, reply: answer.reply
+      }
+let result =
+      bind (dispatch "planning" "") (\planning ->
+      bind (dispatch "orchestration" planning.reply) (\orchestration ->
+      bind (dispatch "execution" orchestration.reply) (\execution ->
+      fold
+        { Refused: \error -> Refused error
+        , Routed: \decision ->
+            let proposal = prompt
+                  { model: decision.model, effort: decision.effort
+                  , text: show { role: "verification", task, previous: execution.reply }
+                  } : { proposedProfile: Text, rationale: Text }
+            in Candidate
+                  { stages:
+                      [ stage "planning" planning
+                      , stage "orchestration" orchestration
+                      , stage "execution" execution
+                      , stage "verification" { decision, reply: proposal.rationale }
+                      ]
+                  , proposal
+                  }
+        }
+        (choose "verification"))))
+# One serialization boundary: a proposal is data, never evidence or adoption.
+in fold
+      { Candidate: \candidate ->
+          { status: "candidate", stages: candidate.stages, proposal: some candidate.proposal
+          , refusal: null, adoptionAllowed: false
+          }
+      , Refused: \error ->
+          { status: "refused", stages: [ ], proposal: null
+          , refusal: some error.reason, adoptionAllowed: false
+          }
+      }
+      result

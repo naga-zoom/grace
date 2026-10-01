@@ -1,0 +1,73 @@
+# Trusted source packets remain facts; model replies remain plans or proposals.
+\configuration ->
+\(task :
+  { taskCohort: Text, workflowCohort: Text, contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+  , goal: Text, acceptanceCriteria: List Text, negativeEvidence: List Text
+  , sourcePackets: List { id: Text, content: Text }, requiredSourceIds: List Text
+  }) ->
+let policy = ./policy.ffg
+let select : forall (a : Type) . (a -> Bool) -> List a -> List a
+      = \predicate -> fold { cons: \x -> \xs -> if predicate x then [ x ] + xs else xs, nil: [ ] }
+let any : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x || rest, nil: false }
+let all : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x && rest, nil: true }
+let count : forall (a : Type) . List a -> Natural = fold { cons: \_ -> \rest -> rest + 1, nil: 0 }
+let knownIds = \(ids : List Text) -> all (\(id : Text) -> id != "" && count (select (\(packet : { id: Text, content: Text }) -> packet.id == id) task.sourcePackets) == 1) ids
+let choose = \(role : Text) -> policy configuration
+      { role, taskCohort: task.taskCohort, workflowCohort: task.workflowCohort
+      , contextProtocol: task.contextProtocol, qualityProtocol: task.qualityProtocol, trialEpoch: task.trialEpoch }
+let payload = \(role : Text) -> \(sources : List { id: Text, content: Text }) -> \(plan : Text) -> \(previous : Text) ->
+      { role, goal: task.goal, acceptanceCriteria: task.acceptanceCriteria, negativeEvidence: task.negativeEvidence
+      , sources, plan, previous, execution: if role == "verification" then some previous else null }
+let dispatch = \(role : Text) -> \(sources : List { id: Text, content: Text }) -> \(plan : Text) -> \(previous : Text) ->
+      fold
+        { Refused: \error -> Refused error
+        , Routed: \decision ->
+            let response = prompt { model: decision.model, effort: decision.effort, text: show (payload role sources plan previous) } : { reply: Text }
+            in Answered { decision, reply: response.reply }
+        }
+        (choose role)
+let bind = \outcome -> \continuation -> fold { Refused: \error -> Refused error, Answered: continuation } outcome
+let stage = \(role : Text) -> \answer ->
+      { role, size: answer.decision.size, model: answer.decision.model, modelVersion: answer.decision.modelVersion
+      , effort: answer.decision.effort, source: answer.decision.source, reply: answer.reply }
+let result =
+      if knownIds task.requiredSourceIds
+      then fold
+        { Refused: \error -> Refused error
+        , Routed: \decision ->
+            let selection = prompt
+                  { model: decision.model, effort: decision.effort, text: show (payload "planning" task.sourcePackets "" "") }
+                  : { reply: Text, selectedSourceIds: List Text }
+            let wanted = selection.selectedSourceIds + task.requiredSourceIds
+            in if knownIds wanted
+               then let sources = select (\(packet : { id: Text, content: Text }) -> any (\(id : Text) -> packet.id == id) wanted) task.sourcePackets
+                    let planning = { decision, reply: selection.reply }
+                    in bind (dispatch "orchestration" sources planning.reply planning.reply) (\orchestration ->
+                       bind (dispatch "execution" sources planning.reply orchestration.reply) (\execution ->
+                       fold
+                         { Refused: \error -> Refused error
+                         , Routed: \verificationDecision ->
+                             let proposal = prompt
+                                   { model: verificationDecision.model, effort: verificationDecision.effort
+                                   , text: show (payload "verification" sources planning.reply execution.reply) }
+                                   : { proposedProfile: Text, rationale: Text }
+                             in Candidate
+                                   { stages: [ stage "planning" planning, stage "orchestration" orchestration, stage "execution" execution
+                                             , stage "verification" { decision: verificationDecision, reply: proposal.rationale } ]
+                                   , proposal }
+                         }
+                         (choose "verification")))
+               else Refused { reason: "Unknown or ambiguous selected source reference" }
+        }
+        (choose "planning")
+      else Refused { reason: "Unknown or ambiguous required source reference" }
+# One JSON boundary. A verifier's proposal never updates observations or gates.
+in fold
+      { Candidate: \candidate ->
+          { status: "candidate", stages: candidate.stages, proposal: some candidate.proposal, refusal: null, adoptionAllowed: false }
+      , Refused: \error ->
+          { status: "refused", stages: [ ], proposal: null, refusal: some error.reason, adoptionAllowed: false }
+      }
+      result

@@ -1,0 +1,19 @@
+# Synthetic baseline catalog; null represents the real alias-only revision shape.
+\workflow ->
+let config =
+      { baseline: "L"
+      , profiles: [ { size: "L", model: "fixture-expert", modelVersion: "fixture-v1", effort: "high" } ]
+      , catalog: [ { model: "fixture-expert", modelVersion: "fixture-v1", efforts: [ "high" ] } ]
+      , observations: [ ] }
+let packets = [ { id: "relevant", content: "Relevant raw fact" }, { id: "required", content: "Required raw dependency" }, { id: "irrelevant", content: "Irrelevant large raw packet" } ]
+let task = \(goal : Text) -> \(sourcePackets : List { id: Text, content: Text }) -> \(requiredSourceIds : List Text) ->
+      { taskCohort: "parser", workflowCohort: "paired-parser", contextProtocol: "packet-v1", qualityProtocol: "objective-v1"
+      , trialEpoch: some "fixture-epoch-1", goal, text: "Legacy full source context"
+      , acceptanceCriteria: [ "Preserve source facts" ], negativeEvidence: [ "Prior trial failed null boundary" ]
+      , sourcePackets, requiredSourceIds }
+let unsupported = { baseline: "XL", profiles: config.profiles, catalog: config.catalog, observations: [ ] }
+in { completed: workflow config (task "Synthetic source-linked task" packets [ "required" ])
+   , refused: workflow unsupported (task "Synthetic source-linked task" packets [ "required" ])
+   , unknownSelection: workflow config (task "Unknown selection" packets [ "required" ])
+   , missingDependency: workflow config (task "Missing dependency" [ { id: "relevant", content: "Relevant raw fact" } ] [ "required" ])
+   , emptySource: workflow config (task "Empty source" [ ] [ ]) }
