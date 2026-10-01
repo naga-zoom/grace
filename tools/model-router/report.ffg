@@ -1,6 +1,6 @@
 # Evidence report. No routing candidate has been adopted.
 let report =
-      { status: "Unadopted; narrow same-workflow token savings measured, full acceptance failed on latency"
+      { status: "Unadopted; Grace's chain used more tokens and time than direct in one synthetic comparison, while context pruning failed the latency gate"
       , architecture:
           { workflow: [ "planning", "orchestration", "execution", "verification" ]
           , policy: "Grace records and table views; no construct-name complexity whitelist"
@@ -62,6 +62,34 @@ let report =
               , policy: "Experimental acceptance failed latency. Production policy also requires lower whole-workflow cost and immutable-revision evidence; cost is unknown and the alias guard prevents promotion"
               , log: "experiments/results-20261002-abba-1/counters.json"
               }
+          , directComparison:
+              { status: "One-order Codex-only synthetic rejection screen; candidate remains unadopted"
+              , provider: "openai"
+              , model: "gpt-5.6-luna"
+              , effort: "low"
+              , order: [ "manual-direct", "grace-selected" ]
+              , objective: "Both arms completed and passed the same exact-output fixture oracle; this is one synthetic task, not broad quality or Haskell capability evidence"
+              , manualDirect:
+                  { nativeTurns: 1, totalTokens: 23842, inputTokens: 23783, outputTokens: 59
+                  , cachedInputTokens: 0, reasoningOutputTokens: 21, elapsedSeconds: 4.545621
+                  , objectivePassed: true, failures: 0, missingUsage: 0
+                  }
+              , graceFourStage:
+                  { nativeTurns: 4, totalTokens: 80118, inputTokens: 79728, outputTokens: 390
+                  , cachedInputTokens: 0, reasoningOutputTokens: 241, elapsedSeconds: 20.268357
+                  , objectivePassed: true, failures: 0, missingUsage: 0
+                  }
+              , combined:
+                  { nativeTurns: 5, totalTokens: 103960, inputTokens: 103511, outputTokens: 449
+                  , cachedInputTokens: 0, reasoningOutputTokens: 262, retries: 0
+                  }
+              , comparison: "Grace used 56276 more tokens (3.360x) and 15.722736 more seconds (4.459x) than manual-direct; usefulSavingsCriteriaPassed=false"
+              , provenance: "A first direct-1 attempt failed local output-schema validation (UnsupportedDirectOutputSchema) before RPC: no native thread/turn, inference or usage. Direct-2 used the declared typed output schema; schema preflight and three synthetic harness tests passed before the single comparison"
+              , limitations: "One order and one synthetic fixture; includes all authoritative native attempts, but does not separate preparation/harness or review costs. Cached input is a subset of input; reasoning output is a subset of output. Dollar and review costs are unknown. No retries, adoption, or general capability claim"
+              , result: "No adoption or additional router features; Claude/Warp deferred; Haskell model-routing benefits remain unproven"
+              , log: "experiments/results-20261002-direct-2/counters.json"
+              , runnerLog: "/tmp/grace-direct-comparison-fixed-20261002.log"
+              }
           }
       , learnedTables:
           { planner: [ ] : List Text
@@ -73,7 +101,7 @@ let report =
           { quality: "Pinned held-out tasks, objective checks and independent semantic review; retain all failures"
           , cost: "Paired baseline versus routing; count context preparation, dispatch, attempts and review"
           , usage: "Final authoritative counters only; cached input is a subset of input; missing counters remain unknown"
-          , activation: "For matched paired run sets, require valid PASSED verifier, whole-workflow quality and independent gates, plus strict lower aggregate whole-workflow cost, tokens and elapsed seconds. This fixture lowered tokens but increased latency and lacks cost data, so it does not qualify"
+          , activation: "For matched paired run sets, require valid PASSED verifier, whole-workflow quality and independent gates, plus strict lower aggregate whole-workflow cost, tokens and elapsed seconds. The AB/BA context-pruning comparison lowered tokens but increased latency and lacks cost; the direct comparison used more tokens and time. Neither qualifies"
           , pending: [ "Replicated paired benchmarks with full acceptance gates", "Pricing and independent-review cost", "Core-task coverage and measured calibration applicability for alias-only catalogs", "Activation and production publication" ]
           }
       , historical: "The superseded Python prototype is retained outside this canonical Grace/Haskell bundle; it is not used"

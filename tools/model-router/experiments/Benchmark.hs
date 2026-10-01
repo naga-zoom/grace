@@ -8,6 +8,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE TypeApplications #-}
 module Main where
 import Control.Exception
 import Control.Monad (unless, when)
@@ -31,6 +32,7 @@ import qualified Grace.Context as Context
 import qualified Grace.Value as GraceValue
 import qualified Grace.Interpret as Interpret
 import qualified Grace.Monad as Grace
+import qualified Grace.Prompt as GracePrompt
 import Grace.Input (Input(..), Mode(..))
 import Grace.Location (Location(..))
 import Grace.Type (Type)
@@ -160,6 +162,14 @@ loadProfile root = do
         (Grace.withPrompt (\(_ :: HostPrompt) _ -> throwIO WrongBenchmarkProfile) (Interpret.interpretWith [] Nothing))
     either throwIO pure (Decode.decode value)
 
+-- Use the declared transport result type, rather than an unsolved inferred type.
+data DirectReply = DirectReply { reply :: Text }
+    deriving stock (Generic)
+    deriving anyclass (FromGrace, ToGraceType)
+
+directSchema :: Type Location
+directSchema = fmap (const Unknown) (Decode.expected @DirectReply)
+
 runBenchmark :: FilePath -> Text -> FilePath -> FilePath -> IO ()
 runBenchmark root provider cwd destination = do
     createDirectoryIfMissing True destination
@@ -257,10 +267,72 @@ runBenchmark root provider cwd destination = do
     putStrLn ("Saved bounded counters and Grace report to " <> destination)
 
 
+-- One direct native call versus the existing four-stage Grace workflow.
+-- This is a rejection screen, not a calibration or production activation gate.
+runQuick :: FilePath -> Text -> FilePath -> FilePath -> IO ()
+runQuick root provider cwd destination = do
+    createDirectoryIfMissing True destination
+    profile <- loadProfile root
+    result <- withCodex cwd provider \client -> do
+        let catalog_ = catalogFacts client
+            task = fixture catalog_ True
+            directPayload = object
+                [ "role" .= ("execution" :: Text), "task" .= field "task" task
+                , "instruction" .= ("Perform the task directly. Return an object with reply containing the requested JSON array as text. No tools or files." :: Text) ]
+        let schema = directSchema
+        let measure name action = do
+                before <- length <$> observations client
+                started <- getMonotonicTimeNSec
+                output_ <- try (timeout 120000000 action >>= maybe (throwIO ExperimentDeadline) pure)
+                ended <- getMonotonicTimeNSec
+                observed <- drop before <$> observations client
+                let answer_ = either (const Nothing) Just (output_ :: Either SomeException Value)
+                    replies = if name == ("manual-direct" :: Text)
+                        then [reply_ | Just (String reply_) <- [answer_ >>= field "reply"]]
+                        else case answer_ >>= field "stages" of
+                            Just (Array stages) -> [reply_ | stage <- Vector.toList stages, field "role" stage == Just (String "execution"), Just (String reply_) <- [field "reply" stage]]
+                            _ -> []
+                    correct = case replies of [reply_] -> oracle reply_; _ -> False
+                    complete = either (const False) (const True) output_
+                        && length observed == (if name == "manual-direct" then 1 else 4)
+                        && all (\o -> nativeUsage o /= Nothing && failure o == Nothing) observed
+                pure (Trial name (fromIntegral (ended-started)/1000000000) correct complete
+                    (either (Just . experimentError) (const Nothing) output_) answer_ observed [])
+        direct <- measure "manual-direct" (prompt client (HostPrompt profile.model profile.effort (jsonText directPayload)) schema)
+        let handler request@HostPrompt{model=chosenModel,effort=chosenEffort} resultType = do
+                observed <- observations client
+                guardBudget (length observed) observed
+                when (length observed >= 5) (throwIO LimitReached)
+                when (sum [totalTokens usage_ | o <- observed, Just usage_ <- [nativeUsage o]] >= 120000) (throwIO LimitReached)
+                unless (chosenModel == profile.model && chosenEffort == profile.effort) (throwIO WrongBenchmarkProfile)
+                prompt client request resultType
+        routed <- if completed direct && objectivePassed direct
+            then Just <$> measure "grace-selected" (evalWorkflow root handler task)
+            else pure Nothing
+        let useful trial = completed trial && objectivePassed trial
+                && elapsedSeconds trial < elapsedSeconds direct
+                && case (workflowTokens direct,workflowTokens trial) of (Just a,Just b) -> b < a; _ -> False
+        pure (object
+            [ "status" .= ("Single paired rejection screen; no adoption or general quality claim" :: Text)
+            , "model" .= profile.model, "effort" .= profile.effort, "modelVersion" .= Null
+            , "order" .= (["manual-direct", "grace-selected"] :: [Text])
+            , "sameObjective" .= True, "manualIncludesAllRawPackets" .= True
+            , "attemptLimit" .= (5 :: Int), "tokenStopThreshold" .= (120000 :: Int)
+            , "preparationAndReviewCost" .= Null, "dollarCost" .= Null
+            , "adoptionAllowed" .= False, "usefulSavingsCriteriaPassed" .= maybe False useful routed
+            , "manual" .= direct, "grace" .= routed
+            , "manualTokens" .= workflowTokens direct, "graceTokens" .= (routed >>= workflowTokens)
+            , "limitations" .= ("One synthetic extraction task, one order; no Haskell capability calibration. Cache differences and preparation/review cost prevent a total-cost claim. New threads use the same host/model/effort. No retries." :: Text) ])
+    BL.writeFile (destination </> "counters.json") (encode result)
+    Text.IO.writeFile (destination </> "report.ffg") ("show (read " <> jsonText (String (jsonText result)) <> " : JSON)\n")
+    putStrLn ("Saved quick comparison to " <> destination)
+
 main :: IO ()
 main = do
     args <- getArgs
     case args of
         ["--test",root] -> tests root
         ["--run",root,provider,cwd,destination] -> runBenchmark root (Text.pack provider) cwd destination
+        ["--quick",root,provider,cwd,destination] -> runQuick root (Text.pack provider) cwd destination
+        ["--schema-check"] -> either (const (fail "UnsupportedDirectOutputSchema")) (const (putStrLn "DirectOutputSchemaSupported")) (GracePrompt.toJSONSchema directSchema)
         _ -> fail "Usage: benchmark --test ROOT | --run ROOT EXACT_PROVIDER NEUTRAL_CWD OUTPUT_DIR"
