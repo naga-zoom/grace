@@ -1,0 +1,5 @@
+{ n: 1 != 2
+, t: "left" != "right"
+, r: { x: [ { y: 1 } ] } != { x: [ { y: 2 } ] }
+, complement: (1 != 2) == (if 1 == 2 then false else true)
+}

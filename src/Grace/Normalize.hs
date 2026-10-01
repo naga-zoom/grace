@@ -615,7 +615,7 @@ evaluate env₀ syntax₀ = do
                 left'  <- loop env left
                 right' <- loop env right
 
-                pure (Value.Scalar location (Bool (left' /= right')))
+                pure (Value.Scalar location (Bool (void left' /= void right')))
 
             Syntax.Operator{ location, operator = Syntax.LessThan, left, right } -> do
                 left'  <- loop env left

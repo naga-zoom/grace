@@ -1,0 +1,1 @@
+{ n: Bool, t: Bool, r: Bool, complement: Bool }
