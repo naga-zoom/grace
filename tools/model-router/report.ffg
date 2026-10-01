@@ -1,14 +1,14 @@
 # Evidence report. No routing candidate has been adopted.
 let report =
-      { status: "Unadopted; Grace's chain used more tokens and time than direct in one synthetic comparison, while context pruning failed the latency gate"
+      { status: "Unadopted one-call candidate; token/time benefit unmeasured. Historical four-call candidate was rejected after using more tokens and time than direct."
       , architecture:
-          { workflow: [ "planning", "orchestration", "execution", "verification" ]
+          { workflow: [ "execution" ]
           , policy: "Grace records and table views; no construct-name complexity whitelist"
           , runtime: "Haskell extends Grace with typed host primitives and native transport"
           , models: "T-shirt profiles mapped explicitly to the current host catalog"
           , bootstrap: "Empty learned tables retain conservative correctness requirements"
-          , mutation: "Verifier proposes a candidate; independent held-out evidence gates activation"
-          , context: "Source-linked packets preserve failures, contradictions and unresolved dependencies"
+          , mutation: "Model output cannot update trusted observations; independent held-out evidence gates any activation"
+          , context: "All supplied raw packets, criteria and negative evidence survive. Required IDs are a minimum floor, never an exhaustive relevance set."
           }
       , evidence:
           { interpreter:
@@ -33,7 +33,7 @@ let report =
               , log: "/tmp/grace-codex-host-probe-20261001.log"
               , interpretation: "Transport works; inherited harness overhead makes this insufficient evidence of efficiency"
               }
-          , candidate:
+          , historicalFourStageCandidate:
               { protocolTests: 28
               , policyCases: 37
               , workflowChecks: 12
@@ -45,6 +45,16 @@ let report =
               , catalog: "Exact model/effort mapping is checked against current catalog availability only; availability proves neither capability nor quality"
               , limitation: "Native aliases have no immutable model revision; current strict guard therefore retains baseline. Bounded-epoch learning is a proposal only; aliases/immutable guard and cancellation/timeout behavior remain untested"
               , protocol: "Five SDK stdio requests, zero native attempts; CLI and MCP outputs match and adoption remains false"
+              , adoptionAllowed: false
+              }
+          , oneCallCandidate:
+              { status: "Behavior-tested candidate only; no paid one-call comparison or activation"
+              , workflowChecks: 15, protocolTests: 28, mcpBoundaryTests: 6, policyCases: 37
+              , behavior: "One native execution attempt per accepted task; bad references/catalog mappings refuse before turns. CLI/MCP share Entry and retain failure/teardown accounting. All packets retain their exact IDs/content and input order."
+              , validation: "Source identity and typed reply structure only. The generic reply:Text schema does not force a correct answer. Domain-specific schemas/compiler validators belong to the caller; independent higher-capability Haskell semantic review remains necessary."
+              , modelChoice: "Prior direct and four-call Grace arms both used Luna and typed schema constraints; they do not prove schemas enable a cheaper model. Settings/profile mappings are unchanged."
+              , measurements: "One-call token/time benefit, dollar cost and review cost remain unknown. Historical ratios below describe only the old four-stage implementation."
+              , retries: "None. Validation feedback with bounded targeted repair or escalation is a later conditional option; every attempt would require accounting."
               , adoptionAllowed: false
               }
           , pairedExperiment:
@@ -102,7 +112,7 @@ let report =
           , cost: "Paired baseline versus routing; count context preparation, dispatch, attempts and review"
           , usage: "Final authoritative counters only; cached input is a subset of input; missing counters remain unknown"
           , activation: "For matched paired run sets, require valid PASSED verifier, whole-workflow quality and independent gates, plus strict lower aggregate whole-workflow cost, tokens and elapsed seconds. The AB/BA context-pruning comparison lowered tokens but increased latency and lacks cost; the direct comparison used more tokens and time. Neither qualifies"
-          , pending: [ "Replicated paired benchmarks with full acceptance gates", "Pricing and independent-review cost", "Core-task coverage and measured calibration applicability for alias-only catalogs", "Activation and production publication" ]
+          , pending: [ "Replicated paired benchmarks with full acceptance gates", "Pricing and independent-review cost", "Core-task coverage and measured calibration applicability for alias-only catalogs", "Activation" ]
           }
       , historical: "The superseded Python prototype is retained outside this canonical Grace/Haskell bundle; it is not used"
       , productionSwap: "None"

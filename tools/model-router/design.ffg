@@ -1,7 +1,7 @@
 # Inspectable candidate with one narrow measured fixture; unadopted and not qualified.
 let design =
-      { status: "Native bridge and Grace policy verified locally; same-workflow token reduction measured once, latency gate failed; not adopted"
-      , owner: "Grace owns planning, orchestration, execution decisions and verification"
+      { status: "Unadopted one-call candidate; benefit unmeasured. Historical four-call candidate rejected; exact old measurements remain historical."
+      , owner: "Grace owns deterministic input checks, pure routing and one execution prompt; independent semantic review stays outside model self-assessment"
       , implementation: "Haskell extends the Grace interpreter only; no separate policy engine"
       , existing:
           { composition: [ "let chaining", "map", "fold", "records", "list.select", "list.reject" ]
@@ -15,7 +15,7 @@ let design =
           , verifier: [ ] : List Text
           }
       , routing:
-          { representation: "One shared evidence table with four role views; native records and list folds"
+          { representation: "Existing shared evidence table; current workflow routes only execution using native records and list folds"
           , bootstrap: "Empty learned tables; explicit conservative constraints govern unknown work"
           , assessment: "Task scope, semantic uncertainty, dependency breadth and available verification; no construct-name whitelist"
           , indicator: "Observed likelihood that a particular model/effort/context configuration satisfies this task's acceptance criteria, with uncertainty"
@@ -26,7 +26,7 @@ let design =
           , calibration: "Use distinct held-out tasks, record failures and uncertainty, and do not treat repeated runs of one task as broad coverage"
           , profiles: "T-shirt profiles mapped to the current host's available models and effort; no cross-provider fallback"
           , context: "Source-linked packets retain failures, contradictions and uncertainty; invalidate on relevant source changes"
-          , promotion: "Verifier proposes changes; independent checks and measured paired trials gate activation"
+          , promotion: "Model replies cannot mutate trusted rows; independent checks and future measured paired trials gate any activation"
           }
       , prerequisite:
           { issue: "Current evaluator executes both if branches"
@@ -46,13 +46,22 @@ let design =
           , errors: "Unsupported host or profile, transport failure and invalid output remain distinct outcomes"
           , usage: "Runtime observations include all attempts; missing counters remain unknown, never model-authored"
           , privacy: "Credentials, commands and transport endpoints stay inside the runtime"
-          , verification: "28 native protocol tests, 6 MCP boundary tests, 37 Grace policy cases and 12 workflow checks pass (/tmp/grace-root-reviewed-final-20261001.log); before-fix and mutation controls fail as intended"
+          , verification: "Historical four-stage verification: 28 native protocol tests, 6 MCP boundary tests, 37 Grace policy cases and 12 workflow checks (/tmp/grace-root-reviewed-final-20261001.log). One-call checks are recorded separately in report.ffg."
           , applicability: "Native model aliases lack immutable revisions. Current strict empirical guard retains baseline; bounded-epoch learning is proposal only"
           , bundledSettings: "Trusted bundled Settings.ffg and shared Entry.ffg supply mappings and scope to CLI and MCP; no mandatory CONFIG/SCOPE JSON. Task-supplied routing overrides refuse. Exact L/high is checked for catalog availability only"
           , mcpBoundary: "Five SDK stdio requests, zero native attempts; CLI and MCP outputs match; adoption remains false (/tmp/grace-bundled-settings-stdio.log)"
-          , remainingLimits: "One same-four-stage native paired fixture only: no single-call/deterministic comparison, pricing, human-review cost, immutable model revision or harness-only decomposition. Alias/immutable guard, cancellation and timeout behavior remain untested"
+          , remainingLimits: "Historical AB/BA and direct-versus-four-stage fixtures only. One-call benefit is unmeasured; dollar/human-review costs and immutable model revision are unknown. No Haskell capability claim."
           , constraint: "Direct access to this chat's collaboration dispatcher remains unavailable. Installed Codex 0.144.5 app-server completed one native Luna/low turn: 29173 input, 15 output, zero cached input. Its catalog lists 5.6/5.5 models, unlike this desktop host's exposed 6-series catalog; do not assume identical availability or routing gains."
           , deferred: "Generic MCP client/discovery is unnecessary until a concrete host tool requires it"
+          }
+      , oneCall:
+          { execution: "Existing typed prompt {reply:Text}; one accepted execution call, no automatic planning/orchestration/self-review calls or retries"
+          , context: "Retain every raw packet. Required IDs remain a dependency floor; empty, duplicate or unknown IDs refuse before prompts."
+          , validation: "Reply schema checks structure only, never semantic correctness. Caller-specific richer schemas and deterministic compiler/tests already compose through the typed prompt primitive. Independent higher-capability Haskell review remains required."
+          , evidence: "Failing-first one-call/refusal/provenance tests; no paid one-call benchmark and no measured savings or cheaper-model-enablement claim"
+          , alternatives: [ "Trusted exhaustive selection could reduce context later; the current required-ID floor does not establish relevance completeness."
+                          , "Reuse scoped source packets only while source identity and acceptance inputs match; no caching/token benefit has been measured."
+                          , "Bounded validation-feedback repair or escalation remains conditional later; all attempts must be measured, never silent retries." ]
           }
       , evaluation:
           { tools:
@@ -71,7 +80,7 @@ let design =
               }
           , benchmark: "One AB/BA same-four-stage fixture, 16 native turns, all without retries or missing usage. A→B: 95,616→80,135 tokens and 22.716→22.963 seconds; B→A: 94,985→79,711 tokens and 22.574→27.955 seconds. All four same-fixture objectives passed; full policy gate failed latency. Aggregate 350,447 total = 349,004 input + 1,443 output; 19,968 cached-input and 828 reasoning-output are subsets. See experiments/results-20261002-abba-1/counters.json"
           , counters: "Cached input is a subset of input; reasoning output is a subset of output; use final cumulative usage without double-counting"
-          , adoption: "Narrow same-workflow token savings measured, but latency increased, pricing and review cost are unknown, and the full policy gate failed; router remains unadopted with no learned rows. Policy eligibility still requires paired run IDs, passed verifier, whole-workflow quality and independent gates, and strictly lower aggregate whole-workflow cost, tokens and elapsed seconds. No broad quality or Haskell capability claim"
+          , adoption: "Historical four-stage context pruning reduced tokens but increased latency; direct comparison rejected its extra calls. New one-call benefit is unmeasured, pricing and review cost are unknown; router remains unadopted with no learned rows. Policy eligibility still requires paired run IDs, passed verifier, whole-workflow quality and independent gates, and strictly lower aggregate whole-workflow cost, tokens and elapsed seconds. No broad quality or Haskell capability claim"
           }
       }
 in show design

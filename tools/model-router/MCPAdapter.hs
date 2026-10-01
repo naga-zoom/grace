@@ -18,9 +18,9 @@ createMCPServer execute report = do
     schema <- taskSchema
     server <- createServer (Implementation "grace-native-router-candidate" "0.1.0")
         (ServerCapabilities (Just (ResourcesCapability False)) (Just (ToolsCapability False)) Nothing)
-        "Candidate/unadopted Grace workflow. run_workflow may invoke paid native provider turns; results are plans/proposals, never adopted policy. Startup owns configuration and trial scope. Read grace-router://report for evidence. nativeAttempts carries provider counters separately from model results."
+        "Candidate/unadopted one-call Grace workflow. run_workflow may invoke a paid native provider turn; typed reply shape does not establish semantic correctness or adopted policy. Startup owns configuration and trial scope. Read grace-router://report for evidence. nativeAttempts carries provider counters separately from model results."
     registerTools server [Tool "run_workflow"
-        (Just "Run the candidate/unadopted Grace workflow on task data. May make native provider calls and consume tokens; repeated calls can differ and incur further usage. Startup policy and trial scope cannot be overridden. See also: grace-router://report resource.")
+        (Just "Run the candidate/unadopted Grace workflow on task data. Deterministic source and policy checks precede one typed execution prompt. May make a native provider call and consume tokens; repeated calls can differ and incur further usage. Startup policy and trial scope cannot be overridden. See also: grace-router://report resource.")
         (object ["type" .= ("object" :: Text), "properties" .= object ["task" .= schema]
             , "required" .= ["task" :: Text], "additionalProperties" .= False])
         (Just (ToolAnnotations (Just "Run candidate Grace workflow") (Just False) (Just False) (Just False) (Just True)))]

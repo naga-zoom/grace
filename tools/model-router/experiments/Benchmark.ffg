@@ -18,6 +18,6 @@ in workflow
   , trialEpoch: null : Optional Text
   , goal: input.task.goal, acceptanceCriteria: input.task.acceptanceCriteria
   , negativeEvidence: input.task.negativeEvidence, sourcePackets: input.task.sourcePackets
-  # Required IDs never enter the planning payload. This is the sole variant.
+  # Historical arm labels vary only the required dependency floor. All raw packets now survive either floor.
   , requiredSourceIds: if input.selected then ["registry-active"] else map (\packet -> packet.id) input.task.sourcePackets
   }

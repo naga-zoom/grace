@@ -13,7 +13,12 @@ let task = \(goal : Text) -> \(sourcePackets : List { id: Text, content: Text })
       , sourcePackets, requiredSourceIds }
 let unsupported = { baseline: "XL", profiles: config.profiles, catalog: config.catalog, observations: [ ] }
 in { completed: workflow config (task "Synthetic source-linked task" packets [ "required" ])
-   , refused: workflow unsupported (task "Synthetic source-linked task" packets [ "required" ])
-   , unknownSelection: workflow config (task "Unknown selection" packets [ "required" ])
+   , refused: workflow unsupported (task "Unsupported mapping" packets [ "required" ])
+   , unknownSelection: workflow config (task "Untrusted selection" packets [ "required" ])
    , missingDependency: workflow config (task "Missing dependency" [ { id: "relevant", content: "Relevant raw fact" } ] [ "required" ])
+   , duplicatePacket: workflow config (task "Duplicate packet" (packets + [ { id: "irrelevant", content: "Second owner" } ]) [ "required" ])
+   , emptyPacketId: workflow config (task "Empty packet ID" (packets + [ { id: "", content: "Unnamed source" } ]) [ "required" ])
+   , duplicateRequired: workflow config (task "Duplicate required ID" packets [ "required", "required" ])
+   , unknownRequired: workflow config (task "Unknown required ID" packets [ "missing" ])
+   , emptyRequired: workflow config (task "Empty required ID" packets [ "" ])
    , emptySource: workflow config (task "Empty source" [ ] [ ]) }

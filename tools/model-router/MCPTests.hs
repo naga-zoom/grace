@@ -65,7 +65,7 @@ fakeCatalog catalogModel malformed = do
                         goodCounters = object ["inputTokens" .= (20 :: Int), "cachedInputTokens" .= (5 :: Int), "outputTokens" .= (2 :: Int)
                             , "reasoningOutputTokens" .= (0 :: Int), "totalTokens" .= (22 :: Int)]
                         usageEvent counters = notification "thread/tokenUsage/updated" (base ["tokenUsage" .= object ["total" .= counters]])
-                        broken = malformed && n == 3
+                        broken = malformed && n == 1
                         terminal = notification "turn/completed" (object ["threadId" .= thread, "turn" .= object
                             ["id" .= turn, "status" .= (if broken then "failed" else "completed" :: Text), "items" .= ([] :: [Value])]])
                     push ([reply identity (object ["turn" .= object ["id" .= turn]])
@@ -140,12 +140,12 @@ main = do
             field "adoptionAllowed" workflow @?= Just (Bool False)
             case field "stages" workflow of
                 Just (Array stages) -> do
-                    Vector.length stages @?= 4
-                    map (field "modelVersion") (Vector.toList stages) @?= replicate 4 (Just Null)
-                    map (field "size") (Vector.toList stages) @?= replicate 4 (Just (String "L"))
+                    Vector.length stages @?= 1
+                    map (field "modelVersion") (Vector.toList stages) @?= replicate 1 (Just Null)
+                    map (field "size") (Vector.toList stages) @?= replicate 1 (Just (String "L"))
                 _ -> assertFailure "Typed baseline stages missing"
             requests <- readIORef sent
-            length [r | r <- requests, field "method" r == Just (String "turn/start")] @?= 4
+            length [r | r <- requests, field "method" r == Just (String "turn/start")] @?= 1
         , testCase "bundled mapping refuses actual catalog mismatch without a turn" do
             (client,sent) <- fakeCatalog "fixture-other" False
             result <- runWorkflow bundle (\action -> action client) task
@@ -156,7 +156,7 @@ main = do
                     field "nativeAttempts" envelope @?= Just (toJSON ([] :: [Value]))
             requests <- readIORef sent
             length [r | r <- requests, field "method" r == Just (String "turn/start")] @?= 0
-        , testCase "MCP execution failure retains every prior attempt and unknown final usage" do
+        , testCase "MCP execution failure retains its one attempt and unknown final usage" do
             (client,_) <- fakeClient True
             server <- createMCPServer (runWorkflow bundle (\action -> action client)) (pure "{}")
             result <- call server "tools/call" (object ["name" .= ("run_workflow" :: Text), "arguments" .= object ["task" .= task]])
@@ -165,7 +165,7 @@ main = do
             field "error" envelope @?= Just (String "NativeProtocolError")
             case field "nativeAttempts" envelope of
                 Just (Array attempts) -> do
-                    Vector.length attempts @?= 3
+                    Vector.length attempts @?= 1
                     field "nativeUsage" (Vector.last attempts) @?= Just Null
                 _ -> assertFailure "Lost failure attempts"
         , testCase "client teardown failure preserves completed attempt accounting" do
@@ -176,7 +176,7 @@ main = do
                 Left envelope -> do
                     field "error" envelope @?= Just (String "GraceInterpretationError")
                     case field "nativeAttempts" envelope of
-                        Just (Array attempts) -> Vector.length attempts @?= 4
+                        Just (Array attempts) -> Vector.length attempts @?= 1
                         _ -> assertFailure "Teardown lost measured usage"
         , testCase "invalid task data and authority overrides are rejected before native initialization" do
             opened <- newIORef (0 :: Int)

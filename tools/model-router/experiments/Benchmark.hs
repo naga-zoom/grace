@@ -14,7 +14,6 @@ import Control.Exception
 import Control.Monad (unless, when)
 import Data.Aeson
 import qualified Data.Aeson.KeyMap as KM
-import qualified Data.ByteString as BS
 import qualified Data.Text.IO as Text.IO
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.IORef
@@ -41,7 +40,6 @@ import NativeCodex
 import System.Environment (getArgs)
 import System.FilePath ((</>))
 import System.Directory (createDirectoryIfMissing)
-import System.Process (readProcess)
 import System.Timeout (timeout)
 import Test.Tasty (defaultMain, testGroup)
 import Test.Tasty.HUnit
@@ -57,7 +55,7 @@ expected :: Value
 expected = toJSON [object ["key" .= key,"value" .= value] | (key,value,True) <- targetRows]
 fixture :: Value -> Bool -> Value
 fixture catalog_ selected = object ["catalog" .= catalog_,"selected" .= selected,"task" .= object
-    ["goal" .= ("Extract enabled entries only from packet registry-active. Execution reply must be a JSON array of objects with exactly key and value, ordered by key. Planning selects only relevant source IDs; other roles preserve this task. Verification checks actual execution; no tools or files." :: Text)
+    ["goal" .= ("Extract enabled entries only from packet registry-active. Execution reply must be a JSON array of objects with exactly key and value, ordered by key. Preserve all supplied facts; no tools or files." :: Text)
     ,"acceptanceCriteria" .= (["No disabled or invented entries; exact values and key order; no commentary inside execution reply."] :: [Text])
     ,"negativeEvidence" .= (["The disabled registry entry must never appear in execution output."] :: [Text])
     ,"sourcePackets" .= (object ["id" .= ("registry-active" :: Text),"content" .= jsonText (toJSON
@@ -111,19 +109,22 @@ tests root = do
             rejected 16 []
             rejected 15 [observed 500000]
             rejected 1 [Observation "fixture" "low" Nothing Nothing Nothing Nothing]
-        ,testCase "planning identical; only downstream raw context differs" do
+        ,testCase "required-source floor never prunes the one-call context" do
             a <- newIORef []; b <- newIORef []
-            _ <- evalWorkflow root (fake a) (fixture catalog_ False)
-            _ <- evalWorkflow root (fake b) (fixture catalog_ True)
+            resultA <- evalWorkflow root (fake a) (fixture catalog_ False)
+            resultB <- evalWorkflow root (fake b) (fixture catalog_ True)
             left <- readIORef a; right <- readIORef b
-            length left @?= 4; length right @?= 4
-            take 1 left @?= take 1 right
-            let withoutSources (Object xs) = Object (KM.delete "sources" xs); withoutSources x = x
+            length left @?= 1; length right @?= 1
+            let withoutRequired (Object xs) = Object (KM.delete "requiredSourceIds" xs); withoutRequired x = x
                 sources x = case field "sources" x of Just (Array xs) -> Vector.toList xs; _ -> []
-            map withoutSources left @?= map withoutSources right
-            map (length . sources) (drop 1 left) @?= [6,6,6]
-            map (length . sources) (drop 1 right) @?= [1,1,1]
-            map (map (field "id") . sources) (drop 1 right) @?= replicate 3 [Just (String "registry-active")]
+            map withoutRequired left @?= map withoutRequired right
+            map (map (field "id") . sources) left @?= [map (Just . String) ["registry-active","archive-1","archive-2","archive-3","archive-4","archive-5"]]
+            map (field "role") left @?= [Just (String "execution")]
+            let executionReply result = case field "stages" result of
+                    Just (Array stages) -> case Vector.toList stages of [stage] -> field "reply" stage; _ -> Nothing
+                    _ -> Nothing
+            executionReply resultA @?= Just (String (jsonText expected))
+            executionReply resultB @?= Just (String (jsonText expected))
         ]))
 
 
@@ -148,8 +149,6 @@ data Trial = Trial
 
 workflowTokens :: Trial -> Maybe Integer
 workflowTokens trial = sum <$> traverse (fmap totalTokens . nativeUsage) (attempts trial)
-payloadBytes :: Trial -> Int
-payloadBytes trial = sum [round number | request <- requests trial, Just (Number number) <- [field "payloadBytes" request]]
 experimentError :: SomeException -> Text
 experimentError err = case fromException err :: Maybe NativeError of
     Just native -> Text.pack (displayException native)
@@ -170,104 +169,7 @@ data DirectReply = DirectReply { reply :: Text }
 directSchema :: Type Location
 directSchema = fmap (const Unknown) (Decode.expected @DirectReply)
 
-runBenchmark :: FilePath -> Text -> FilePath -> FilePath -> IO ()
-runBenchmark root provider cwd destination = do
-    createDirectoryIfMissing True destination
-    profile <- loadProfile root
-    calls <- newIORef (0 :: Int)
-    trialLog <- newIORef []
-    requestLog <- newIORef []
-    clientRef <- newIORef Nothing
-    catalogRef <- newIORef Null
-    start <- getMonotonicTimeNSec
-    hostBuild <- Text.strip . Text.pack <$> readProcess "codex" ["--version"] ""
-    outcome <- try (withCodex cwd provider \client -> do
-        writeIORef clientRef (Just client)
-        let actualCatalog = catalogFacts client
-            supports entry = field "model" entry == Just (String (profile.model))
-                && case field "efforts" entry of Just (Array efforts) -> String (profile.effort) `elem` Vector.toList efforts; _ -> False
-        writeIORef catalogRef actualCatalog
-        unless (case actualCatalog of Array entries -> any supports (Vector.toList entries); _ -> False) (throwIO ProfileUnavailable)
-        putStrLn "Verified exact native benchmark model and effort; no fallback."
-        let handler request@HostPrompt{model=chosenModel,effort=chosenEffort,text} schema = do
-                unless (chosenModel == profile.model && chosenEffort == profile.effort) (throwIO WrongBenchmarkProfile)
-                now <- getMonotonicTimeNSec
-                when (now - start >= 2400 * 1000000000) (throwIO ExperimentDeadline)
-                count <- readIORef calls
-                observed <- observations client
-                guardBudget count observed
-                payload <- either (const (throwIO WrongBenchmarkProfile)) pure (eitherDecodeStrict (Encoding.encodeUtf8 text) :: Either String Value)
-                writeIORef calls (count+1)
-                modifyIORef' requestLog (<> [object ["index" .= (count+1), "role" .= field "role" payload
-                    ,"payloadBytes" .= BS.length (Encoding.encodeUtf8 text)
-                    ,"sourceIds" .= case field "sources" payload of
-                        Just (Array sources) -> toJSON [field "id" source | source <- Vector.toList sources]
-                        _ -> Null]])
-                answer_ <- prompt client request schema
-                current <- observations client
-                unless (all ((/= Nothing) . nativeUsage) current) (throwIO UnknownAccounting)
-                putStrLn ("Native attempt " <> show (count+1) <> " complete; cumulative total tokens "
-                    <> show (sum [totalTokens usage_ | observation <- current, Just usage_ <- [nativeUsage observation]]))
-                pure answer_
-            runArms [] = pure ()
-            runArms (selected:rest) = do
-                beforeAttempts <- length <$> observations client
-                beforeRequests <- length <$> readIORef requestLog
-                begun <- getMonotonicTimeNSec
-                result <- try do
-                    timed <- timeout 510000000 (evalWorkflow root handler (fixture actualCatalog selected))
-                    maybe (throwIO ExperimentDeadline) pure timed
-                ended <- getMonotonicTimeNSec
-                observed <- drop beforeAttempts <$> observations client
-                sent <- drop beforeRequests <$> readIORef requestLog
-                let output_ = either (const Nothing) Just (result :: Either SomeException Value)
-                    correct = case output_ >>= field "stages" of
-                        Just (Array stages) -> case [reply_ | stage <- Vector.toList stages, field "role" stage == Just (String "execution"), Just (String reply_) <- [field "reply" stage]] of
-                            [reply_] -> oracle reply_
-                            _ -> False
-                        _ -> False
-                    finished = either (const False) (const True) result && length observed == 4
-                        && all (\observation -> nativeUsage observation /= Nothing && failure observation == Nothing) observed
-                    trial = Trial (if selected then "B-selected" else "A-full")
-                        (fromIntegral (ended-begun)/1000000000) correct finished
-                        (either (Just . experimentError) (const Nothing) result) output_ observed sent
-                modifyIORef' trialLog (<> [trial])
-                putStrLn (Text.unpack (arm trial) <> ": objective=" <> show correct <> ", complete=" <> show finished)
-                when (finished && correct) (runArms rest)
-        runArms [False,True,True,False]) :: IO (Either SomeException ())
-    ended <- getMonotonicTimeNSec
-    trials <- readIORef trialLog
-    client <- readIORef clientRef
-    recorded <- maybe (pure []) observations client
-    catalog_ <- readIORef catalogRef
-    count <- readIORef calls
-    let matchedPairs = case trials of [a,b,b2,a2] -> [(a,b),(a2,b2)]; _ -> []
-        pairPass (a,b) = completed a && completed b && objectivePassed a && objectivePassed b
-            && payloadBytes b < payloadBytes a && elapsedSeconds b <= elapsedSeconds a
-            && case (workflowTokens a,workflowTokens b) of (Just x,Just y) -> y*10 <= x*9; _ -> False
-        report = object
-            ["status" .= ("bounded experimental measurement; unadopted" :: Text),"adoptionAllowed" .= False
-            ,"model" .= profile.model,"effort" .= profile.effort,"modelVersion" .= Null
-            ,"nativeHostBuild" .= hostBuild,"catalog" .= catalog_,"provider" .= provider
-            ,"cwdKind" .= ("fresh neutral temporary directory" :: Text)
-            ,"nativeInputIncludesHarnessAndPayload" .= True,"commonHarnessTokensSeparatelyIdentified" .= False
-            ,"dollarPricing" .= Null,"humanReviewCost" .= Null
-            ,"attemptLimit" .= (16 :: Int),"tokenStopThreshold" .= (500000 :: Int)
-            ,"requestedPromptCount" .= count,"nativeTurnIdsObserved" .= length [observation | observation <- recorded, nativeTurnId observation /= Nothing],"nativeAttempts" .= recorded
-            ,"experimentWallSeconds" .= (fromIntegral (ended-start)/1000000000 :: Double)
-            ,"runnerFailure" .= either (Just . experimentError) (const (Nothing :: Maybe Text)) outcome
-            ,"allFourObjectivePassed" .= (length trials == 4 && all objectivePassed trials && all completed trials)
-            ,"usefulSavingsCriteriaPassed" .= (length matchedPairs == 2 && all pairPass matchedPairs)
-            ,"pairedTotals" .= [object ["A_tokens" .= workflowTokens a,"B_tokens" .= workflowTokens b
-                ,"A_seconds" .= elapsedSeconds a,"B_seconds" .= elapsedSeconds b
-                ,"A_payloadBytes" .= payloadBytes a,"B_payloadBytes" .= payloadBytes b,"passed" .= pairPass (a,b)] | (a,b) <- matchedPairs]
-            ,"trials" .= trials]
-    BL.writeFile (destination </> "counters.json") (encode report)
-    Text.IO.writeFile (destination </> "report.ffg") ("show (read " <> jsonText (String (jsonText report)) <> " : JSON)\n")
-    putStrLn ("Saved bounded counters and Grace report to " <> destination)
-
-
--- One direct native call versus the existing four-stage Grace workflow.
+-- One direct native call versus the one-call Grace workflow; historical counters stay unchanged.
 -- This is a rejection screen, not a calibration or production activation gate.
 runQuick :: FilePath -> Text -> FilePath -> FilePath -> IO ()
 runQuick root provider cwd destination = do
@@ -294,7 +196,7 @@ runQuick root provider cwd destination = do
                             _ -> []
                     correct = case replies of [reply_] -> oracle reply_; _ -> False
                     complete = either (const False) (const True) output_
-                        && length observed == (if name == "manual-direct" then 1 else 4)
+                        && length observed == 1
                         && all (\o -> nativeUsage o /= Nothing && failure o == Nothing) observed
                 pure (Trial name (fromIntegral (ended-started)/1000000000) correct complete
                     (either (Just . experimentError) (const Nothing) output_) answer_ observed [])
@@ -307,7 +209,7 @@ runQuick root provider cwd destination = do
                 unless (chosenModel == profile.model && chosenEffort == profile.effort) (throwIO WrongBenchmarkProfile)
                 prompt client request resultType
         routed <- if completed direct && objectivePassed direct
-            then Just <$> measure "grace-selected" (evalWorkflow root handler task)
+            then Just <$> measure "grace-one-call" (evalWorkflow root handler task)
             else pure Nothing
         let useful trial = completed trial && objectivePassed trial
                 && elapsedSeconds trial < elapsedSeconds direct
@@ -315,7 +217,7 @@ runQuick root provider cwd destination = do
         pure (object
             [ "status" .= ("Single paired rejection screen; no adoption or general quality claim" :: Text)
             , "model" .= profile.model, "effort" .= profile.effort, "modelVersion" .= Null
-            , "order" .= (["manual-direct", "grace-selected"] :: [Text])
+            , "order" .= (["manual-direct", "grace-one-call"] :: [Text])
             , "sameObjective" .= True, "manualIncludesAllRawPackets" .= True
             , "attemptLimit" .= (5 :: Int), "tokenStopThreshold" .= (120000 :: Int)
             , "preparationAndReviewCost" .= Null, "dollarCost" .= Null
@@ -332,7 +234,7 @@ main = do
     args <- getArgs
     case args of
         ["--test",root] -> tests root
-        ["--run",root,provider,cwd,destination] -> runBenchmark root (Text.pack provider) cwd destination
+        ["--run",_,_,_,_] -> fail "HistoricalFourStageExperimentUnavailable: the current one-call workflow retains all packets; old AB/BA arms no longer differ. Historical counters remain unchanged."
         ["--quick",root,provider,cwd,destination] -> runQuick root (Text.pack provider) cwd destination
         ["--schema-check"] -> either (const (fail "UnsupportedDirectOutputSchema")) (const (putStrLn "DirectOutputSchemaSupported")) (GracePrompt.toJSONSchema directSchema)
-        _ -> fail "Usage: benchmark --test ROOT | --run ROOT EXACT_PROVIDER NEUTRAL_CWD OUTPUT_DIR"
+        _ -> fail "Usage: benchmark --test ROOT | --quick ROOT EXACT_PROVIDER NEUTRAL_CWD OUTPUT_DIR (--run retired)"
