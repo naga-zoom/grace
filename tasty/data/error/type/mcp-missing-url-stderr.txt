@@ -1,0 +1,23 @@
+Record type mismatch
+
+The following record type:
+
+  { }
+
+tasty/data/error/type/mcp-missing-url-input.ffg:1:5: 
+  │
+1 │ mcp { method: "tools/list" } : List Text
+  │     ↑
+
+… is not a subtype of the following record type:
+
+  { url: Text }
+
+tasty/data/error/type/mcp-missing-url-input.ffg:1:1: 
+  │
+1 │ mcp { method: "tools/list" } : List Text
+  │ ↑
+
+The latter record has the following extra fields:
+
+• url

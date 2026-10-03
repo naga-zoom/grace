@@ -1,0 +1,1 @@
+mcp { url: "https://example.com", method: "tools/call" } : Key

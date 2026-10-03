@@ -1,0 +1,33 @@
+# Candidate/unadopted fixed three-tier ladder. Does not replace Settings.ffg;
+# Entry.ffg/workflow.ffg continue to use Settings.ffg unchanged.
+#
+# Exactly three fixed (model, effort) tiers, each addressed by an existing
+# policy.ffg size label (XS/S/L). Never dynamically mutate an effort value at
+# runtime -- escalation means swapping configuration.baseline to the next
+# fixed tier label below, not editing a profile's effort field.
+#
+# Tier floors are confirmed against this account's live codex model/list RPC
+# (not just generic docs): neither gpt-6-luna nor gpt-6.1-sol ever advertises
+# "none"/"minimal" through codex for this account's auth mode, so "low" is
+# each model's real floor here. gpt-6-astra is permanently excluded.
+{ configuration:
+    { baseline: "XS"
+    , profiles:
+        [ { size: "XS", model: "gpt-6-luna", modelVersion: null : Optional Text, effort: "low" }
+        , { size: "S", model: "gpt-6.1-sol", modelVersion: null : Optional Text, effort: "low" }
+        , { size: "L", model: "gpt-6.1-sol", modelVersion: null : Optional Text, effort: "high" }
+        ]
+    , observations: [ ] : List
+        { runId: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text
+        , role: Text, taskCohort: Text, workflowCohort: Text
+        , contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+        , verifier: Text, wholeWorkflowQuality: Text, independentGate: Text
+        , measurements: { wholeWorkflowTokens: Optional Natural, wholeWorkflowCost: Optional Real, wholeWorkflowSeconds: Optional Real }
+        }
+    }
+, scope:
+    { taskCohort: "unclassified", workflowCohort: "tiered-candidate"
+    , contextProtocol: "packet-v1", qualityProtocol: "objective-v1"
+    , trialEpoch: null : Optional Text
+    }
+}

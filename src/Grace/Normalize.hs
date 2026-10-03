@@ -57,6 +57,7 @@ import qualified Grace.GitHub as GitHub
 import qualified Grace.HTTP as HTTP
 import qualified Grace.Import as Import
 import qualified Grace.Infer as Infer
+import qualified Grace.MCP as MCP
 import qualified Grace.Monad as Grace
 import qualified Grace.Monotype as Monotype
 import qualified Grace.Pretty as Pretty
@@ -473,6 +474,42 @@ evaluate env₀ syntax₀ = do
 
                                 value <- Infer.checkJSON solvedSchema responseValue
                                 return (fmap (\_ -> Unknown) value)
+
+            Syntax.MCP{ schema = Nothing } -> do
+                Exception.throwIO MissingSchema
+            Syntax.MCP{ import_, arguments, schema = Just schema } -> do
+                newArguments <- loop env arguments
+
+                mcpArguments <- case decode newArguments of
+                    Left exception -> Exception.throwIO exception
+                    Right mcpArguments -> return mcpArguments
+
+                responseValue <- liftIO (MCP.mcp import_ mcpArguments)
+
+                if import_
+                    then do
+                        text <- liftIO (MCP.importResultText responseValue)
+
+                        bindings <- liftIO (generateContext env)
+
+                        parent <- Reader.ask
+
+                        Reader.local (\i -> i <> Code "(mcp)" text) do
+                            child <- Reader.ask
+
+                            Import.referentiallySane parent child
+
+                            (_, value) <- Interpret.interpretWith bindings (Just schema)
+
+                            return value
+
+                    else do
+                        Status{ context } <- State.get
+
+                        let solvedSchema = Context.solveType context schema
+
+                        value <- Infer.checkJSON solvedSchema responseValue
+                        return (fmap (\_ -> Unknown) value)
 
             Syntax.Read{ schema = Nothing } -> do
                 Exception.throwIO MissingSchema

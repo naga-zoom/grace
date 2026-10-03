@@ -138,6 +138,7 @@ lexToken =
             , Grace.Parser.For          <$ symbol "for"
             , Grace.Parser.GitHub       <$ symbol "github"
             , Grace.Parser.HTTP         <$ symbol "http"
+            , Grace.Parser.MCP          <$ symbol "mcp"
             , Grace.Parser.Read         <$ symbol "read"
             , Grace.Parser.If           <$ symbol "if"
             , Grace.Parser.Import       <$ symbol "import"
@@ -576,6 +577,7 @@ data Token
     | Or
     | Plus
     | HTTP
+    | MCP
     | Prompt
     | Read
     | Real
@@ -792,6 +794,7 @@ render t = case t of
     Grace.Parser.Or                 -> "||"
     Grace.Parser.Plus               -> "+"
     Grace.Parser.HTTP               -> "http"
+    Grace.Parser.MCP                -> "mcp"
     Grace.Parser.Prompt             -> "prompt"
     Grace.Parser.Read               -> "read"
     Grace.Parser.Real               -> "Real"
@@ -1064,6 +1067,12 @@ grammar form = mdo
                                     arguments <- projectExpression
 
                                     return \import_ -> Syntax.HTTP{ location, import_, arguments, schema = Nothing }
+
+                            <|> do  location <- locatedToken Grace.Parser.MCP
+
+                                    arguments <- projectExpression
+
+                                    return \import_ -> Syntax.MCP{ location, import_, arguments, schema = Nothing }
 
                             <|> do  location <- locatedToken Grace.Parser.Read
 

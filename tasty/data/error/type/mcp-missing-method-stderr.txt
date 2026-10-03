@@ -1,0 +1,23 @@
+Record type mismatch
+
+The following record type:
+
+  { }
+
+tasty/data/error/type/mcp-missing-method-input.ffg:1:5: 
+  │
+1 │ mcp { url: "https://example.com" } : List Text
+  │     ↑
+
+… is not a subtype of the following record type:
+
+  { method: Text }
+
+tasty/data/error/type/mcp-missing-method-input.ffg:1:1: 
+  │
+1 │ mcp { url: "https://example.com" } : List Text
+  │ ↑
+
+The latter record has the following extra fields:
+
+• method

@@ -1,0 +1,12 @@
+Not a subtype of JSON
+
+The following type:
+
+  Key
+
+tasty/data/error/type/mcp-key-not-json-input.ffg:1:60: 
+  │
+1 │ mcp { url: "https://example.com", method: "tools/call" } : Key
+  │                                                            ↑
+
+… is not a subtype of JSON.

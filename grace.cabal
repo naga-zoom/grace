@@ -67,6 +67,7 @@ library
                      , Grace.Interpret
                      , Grace.Label
                      , Grace.Location
+                     , Grace.MCP
                      , Grace.Monad
                      , Grace.Monotype
                      , Grace.Normalize
@@ -82,6 +83,7 @@ library
 
   other-modules:       Grace.Compat
                      , Grace.HTTP.Type
+                     , Grace.MCP.Type
                      , Grace.Marshal
                      , Paths_grace
 
@@ -126,8 +128,10 @@ library
     hs-source-dirs:    ghc
     build-depends:     ansi-terminal
                      , haskeline
+                     , hs-mcp
                      , http-client
                      , http-client-tls
+                     , network
                      , optparse-applicative
                      , repline
                      , retry

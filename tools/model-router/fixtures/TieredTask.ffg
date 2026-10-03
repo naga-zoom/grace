@@ -1,0 +1,9 @@
+# Fixture task for TieredWorkflowTests.hs. One accepted source packet,
+# required IDs satisfied -- exercises the routed (not refused) path.
+{ taskCohort: "unclassified", workflowCohort: "tiered-candidate"
+, contextProtocol: "packet-v1", qualityProtocol: "objective-v1", trialEpoch: null : Optional Text
+, goal: "Synthetic tiered task", acceptanceCriteria: [ "Preserve source facts" ]
+, negativeEvidence: [ ]
+, sourcePackets: [ { id: "required", content: "Required raw dependency" } ]
+, requiredSourceIds: [ "required" ]
+}

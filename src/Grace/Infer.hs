@@ -37,6 +37,7 @@ import Grace.Decode (ToGraceType(..))
 import Grace.Existential (Existential)
 import Grace.GitHub (GitHub(..))
 import Grace.HTTP.Type (HTTP(..))
+import Grace.MCP.Type (MCP(..))
 import Grace.Input (Input(..), Mode(..))
 import Grace.Location (Location(..))
 import Grace.Monad (Grace, Status(..))
@@ -3211,6 +3212,33 @@ infer e₀ = do
 
             return (newSchema, newHTTP)
 
+        Syntax.MCP{ location, import_, arguments, schema } -> do
+            let argumentsType = fmap (\_ -> location) (expected @MCP)
+
+            newArguments <- check arguments argumentsType
+
+            newSchema <- case schema of
+                Just output -> do
+                    return output
+
+                Nothing -> do
+                    existential <- fresh
+
+                    preserve (Context.UnsolvedType existential)
+
+                    return Type.UnsolvedType{ location, existential }
+
+            context <- get
+
+            let newMCP = Syntax.MCP
+                    { location
+                    , import_
+                    , arguments = solveSyntax context newArguments
+                    , schema = Just newSchema
+                    }
+
+            return (newSchema, newMCP)
+
         Syntax.Read{ location, import_, arguments, schema } -> do
             let argumentsType = fmap (\_ -> location) (expected @Text)
 
@@ -4430,6 +4458,20 @@ check Syntax.HTTP{ import_, schema = Nothing, .. } annotation = do
     context <- get
 
     return Syntax.HTTP{ arguments = newArguments, schema = Just (Context.solveType context annotation), .. }
+
+check Syntax.MCP{ import_, schema = Nothing, .. } annotation = do
+    let input = fmap (\_ -> location) (expected @MCP)
+
+    newArguments <- check arguments input
+
+    Monad.unless import_ do
+        context <- get
+
+        isSubtypeOfJSON location (Context.solveType context annotation)
+
+    context <- get
+
+    return Syntax.MCP{ arguments = newArguments, schema = Just (Context.solveType context annotation), .. }
 
 check Syntax.Read{ import_, schema = Nothing, .. } annotation = do
     newArguments <- check arguments (fmap (\_ -> location) (expected @Text))

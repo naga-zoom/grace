@@ -1,0 +1,1 @@
+mcp { method: "tools/list" } : List Text

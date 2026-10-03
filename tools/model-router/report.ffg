@@ -101,6 +101,15 @@ let report =
               , runnerLog: "/tmp/grace-direct-comparison-fixed-20261002.log"
               }
           }
+      , tieredRoutingCandidate:
+          { status: "Unadopted sibling candidate (TieredSettings.ffg/TieredWorkflow.ffg/EscalatingWorkflow.ffg); Settings.ffg/workflow.ffg/Entry.ffg unchanged"
+          , rootCauseFix: "directComparison.graceFourStage above used one identical model/effort for all four roles; the regression traces to uniform model choice, not stage count or context pruning. This candidate's orchestration role picks a per-task execution tier instead of a constant."
+          , fixedTiers: "gpt-6-luna/low, gpt-6.1-sol/low, gpt-6.1-sol/high (final). gpt-6-astra permanently excluded by explicit instruction. Live codex model/list (raw JSON-RPC) shows none/minimal unavailable for every model in this account's catalog, overriding the general per-model docs; low is each model's real floor here, confirmed, not assumed."
+          , costTrapAvoided: "developers.openai.com/api/docs/guides/reasoning: reasoning tokens bill as output tokens and can reach tens of thousands depending on effort. Each tier is a fixed, pre-declared (model,effort) pair; escalation swaps which tier runs next and never mutates an effort value, so this cost trap cannot be hit by construction."
+          , cps: "EscalatingWorkflow.ffg keeps all routing in Grace; the host executes one of a closed six-member Action vocabulary chosen from a trusted validationKind (never model output) and injects the structured Result back via an explicit history list on re-invocation. Only the first tier choice is a model call; later escalation is mechanical."
+          , verification: "TieredWorkflowTests.hs 10/10 and EscalatingWorkflowTests.hs 6/6, both via the same Grace.withPrompt-scoped Haskell harness pattern as RouterTests.hs: heterogeneous per-tier routing, fail-closed on an unrecognized model-authored tier, source-identity refusals preserved, exactly one escalation step per failed round, exhaustion refuses rather than inventing a fourth tier, and every stage across every run uses one of the three fixed (model,effort) pairs."
+          , remaining: "No live paid AB/BA run against the real native host yet; needs explicit approval before spending real API tokens. No adoptionAllowed flip without the same acceptance gates as the one-call candidate: paired run IDs, passed verifier, whole-workflow quality, independent gates, strictly lower aggregate cost/tokens/seconds."
+          }
       , learnedTables:
           { planner: [ ] : List Text
           , orchestrator: [ ] : List Text

@@ -1,0 +1,106 @@
+# Candidate/unadopted tiered three-role workflow. Chains policy.ffg once per
+# role (planning -> orchestration -> execution) instead of workflow.ffg's
+# single execution-only call. Does not replace workflow.ffg or Entry.ffg;
+# both stay wired to Settings.ffg unchanged.
+#
+# planning and orchestration always run at the cheapest fixed tier ("XS");
+# per the review-cheaper-than-write principle, both are structured to force
+# small bounded output, not open-ended generation. orchestration's reply
+# chooses which fixed tier executes the task -- this is the fix for the
+# historical regression, where all four stages used one identical
+# model/effort regardless of task complexity (see report.ffg
+# directComparison.graceFourStage). The model's chosen tier label is never
+# trusted directly: policy.ffg already refuses any configuration.baseline
+# that does not exactly match one of the three fixed profile sizes, so an
+# unexpected or hallucinated label fails closed, never silently.
+#
+# Escalation/retry on verification failure (host-executed CPS handoff) is a
+# separate later piece, not implemented in this one-pass chain.
+\configuration ->
+\(task :
+  { taskCohort: Text, workflowCohort: Text, contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+  , goal: Text, acceptanceCriteria: List Text, negativeEvidence: List Text
+  , sourcePackets: List { id: Text, content: Text }, requiredSourceIds: List Text
+  }) ->
+let policy = ./policy.ffg
+let select : forall (a : Type) . (a -> Bool) -> List a -> List a
+      = \predicate -> fold { cons: \x -> \xs -> if predicate x then [ x ] + xs else xs, nil: [ ] }
+let all : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x && rest, nil: true }
+let count : forall (a : Type) . List a -> Natural = fold { cons: \_ -> \rest -> rest + 1, nil: 0 }
+let uniqueIds = \(ids : List Text) -> all (\(id : Text) -> id != "" && count (select (\(other : Text) -> other == id) ids) == 1) ids
+let packetIds = map (\(packet : { id: Text, content: Text }) -> packet.id) task.sourcePackets
+let knownRequired = uniqueIds task.requiredSourceIds && all (\(id : Text) -> count (select (\(other : Text) -> other == id) packetIds) == 1) task.requiredSourceIds
+let scope =
+      { taskCohort: task.taskCohort, workflowCohort: task.workflowCohort
+      , contextProtocol: task.contextProtocol, qualityProtocol: task.qualityProtocol, trialEpoch: task.trialEpoch
+      }
+# Fixed-tier escalation never mutates an effort value; it only ever swaps
+# which pre-declared tier (profile size) policy.ffg is asked to resolve.
+let decide = \(role : Text) -> \(tier : Text) ->
+      policy
+        { baseline: tier, profiles: configuration.profiles
+        , catalog: configuration.catalog, observations: configuration.observations
+        }
+        { role, taskCohort: scope.taskCohort, workflowCohort: scope.workflowCohort
+        , contextProtocol: scope.contextProtocol, qualityProtocol: scope.qualityProtocol, trialEpoch: scope.trialEpoch
+        }
+let refusal = \(reason : Text) ->
+      { status: "refused", stages: [ ]
+      , proposal: null : Optional { proposedProfile: Text, rationale: Text }
+      , refusal: some reason, adoptionAllowed: false
+      }
+in
+  if uniqueIds packetIds && knownRequired
+  then fold
+        { Routed: \planningChoice ->
+            let planResponse = prompt
+                  { model: planningChoice.model, effort: planningChoice.effort
+                  , text: show
+                      { role: "planning", goal: task.goal, acceptanceCriteria: task.acceptanceCriteria
+                      , sources: task.sourcePackets, requiredSourceIds: task.requiredSourceIds }
+                  } : { plan: Text }
+            in fold
+                { Routed: \orchestrationChoice ->
+                    let triage = prompt
+                          { model: orchestrationChoice.model, effort: orchestrationChoice.effort
+                          , text: show
+                              { role: "orchestration", plan: planResponse.plan
+                              , goal: task.goal, acceptanceCriteria: task.acceptanceCriteria
+                              , availableTiers: [ "XS", "S", "L" ] }
+                          } : { executionTier: Text }
+                    in fold
+                        { Routed: \executionChoice ->
+                            let executionResponse = prompt
+                                  { model: executionChoice.model, effort: executionChoice.effort
+                                  , text: show
+                                      { role: "execution", plan: planResponse.plan, goal: task.goal
+                                      , acceptanceCriteria: task.acceptanceCriteria, negativeEvidence: task.negativeEvidence
+                                      , sources: task.sourcePackets, requiredSourceIds: task.requiredSourceIds }
+                                  } : { reply: Text }
+                            in
+                              { status: "candidate"
+                              , stages:
+                                  [ { role: "planning", size: planningChoice.size, model: planningChoice.model
+                                    , modelVersion: planningChoice.modelVersion, effort: planningChoice.effort
+                                    , source: planningChoice.source, reply: planResponse.plan }
+                                  , { role: "orchestration", size: orchestrationChoice.size, model: orchestrationChoice.model
+                                    , modelVersion: orchestrationChoice.modelVersion, effort: orchestrationChoice.effort
+                                    , source: orchestrationChoice.source, reply: triage.executionTier }
+                                  , { role: "execution", size: executionChoice.size, model: executionChoice.model
+                                    , modelVersion: executionChoice.modelVersion, effort: executionChoice.effort
+                                    , source: executionChoice.source, reply: executionResponse.reply }
+                                  ]
+                              , proposal: null : Optional { proposedProfile: Text, rationale: Text }
+                              , refusal: null : Optional Text, adoptionAllowed: false
+                              }
+                        , Refused: \error -> refusal error.reason
+                        }
+                        (decide "execution" triage.executionTier)
+                , Refused: \error -> refusal error.reason
+                }
+                (decide "orchestration" "XS")
+        , Refused: \error -> refusal error.reason
+        }
+        (decide "planning" "XS")
+  else refusal "Unknown, empty or ambiguous source reference"

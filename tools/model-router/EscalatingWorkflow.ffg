@@ -1,0 +1,166 @@
+# Candidate/unadopted CPS escalation workflow. Design for task 13: Action is
+# a closed, host-executed vocabulary chosen deterministically from a
+# host/task-trusted `validationKind` (never from model output); Result is
+# injected back into Grace via `history` on re-invocation so Grace keeps all
+# routing/escalation control while the host only executes bounded mechanics.
+# Does not replace TieredWorkflow.ffg, workflow.ffg, or Entry.ffg.
+#
+# Protocol (host loop lives in ONE long-lived process/`withCodex` scope --
+# never respawn the native host per round, see design notes in memory):
+#   1. First call: plan = null, history = [].
+#   2. If status == "pendingValidation": host executes `pendingAction`
+#      against `pendingAttempt.reply`, producing {ok, diagnostics}, appends
+#      pendingAttempt + that result as one new history entry, and re-invokes
+#      with the SAME `plan` echoed back (never re-run planning on retry) and
+#      the extended `history`.
+#   3. Repeat until status is "candidate" or "refused".
+#
+# Escalation across tiers after the first attempt is purely deterministic
+# (nextTier), never a model decision -- only the very first tier choice
+# (orchestration's triage) is a model call. This keeps every escalation
+# round cheap and removes any model-authored control over which tier runs
+# next.
+\configuration ->
+\(validationKind : Text) ->
+\(plan : Optional Text) ->
+\(history : List
+    { tier: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text, source: Text
+    , reply: Text, action: Text, ok: Bool, diagnostics: List Text
+    }) ->
+\(task :
+  { taskCohort: Text, workflowCohort: Text, contextProtocol: Text, qualityProtocol: Text, trialEpoch: Optional Text
+  , goal: Text, acceptanceCriteria: List Text, negativeEvidence: List Text
+  , sourcePackets: List { id: Text, content: Text }, requiredSourceIds: List Text
+  }) ->
+let policy = ./policy.ffg
+let select : forall (a : Type) . (a -> Bool) -> List a -> List a
+      = \predicate -> fold { cons: \x -> \xs -> if predicate x then [ x ] + xs else xs, nil: [ ] }
+let all : forall (a : Type) . (a -> Bool) -> List a -> Bool
+      = \predicate -> fold { cons: \x -> \rest -> predicate x && rest, nil: true }
+let count : forall (a : Type) . List a -> Natural = fold { cons: \_ -> \rest -> rest + 1, nil: 0 }
+let last : forall (a : Type) . List a -> Optional a
+      = \xs -> fold { cons: \x -> \rest -> fold { null: some x, some: \_ -> rest } rest, nil: null } xs
+let uniqueIds = \(ids : List Text) -> all (\(id : Text) -> id != "" && count (select (\(other : Text) -> other == id) ids) == 1) ids
+let packetIds = map (\(packet : { id: Text, content: Text }) -> packet.id) task.sourcePackets
+let knownRequired = uniqueIds task.requiredSourceIds && all (\(id : Text) -> count (select (\(other : Text) -> other == id) packetIds) == 1) task.requiredSourceIds
+let scope =
+      { taskCohort: task.taskCohort, workflowCohort: task.workflowCohort
+      , contextProtocol: task.contextProtocol, qualityProtocol: task.qualityProtocol, trialEpoch: task.trialEpoch
+      }
+let decide = \(role : Text) -> \(tier : Text) ->
+      policy
+        { baseline: tier, profiles: configuration.profiles
+        , catalog: configuration.catalog, observations: configuration.observations
+        }
+        { role, taskCohort: scope.taskCohort, workflowCohort: scope.workflowCohort
+        , contextProtocol: scope.contextProtocol, qualityProtocol: scope.qualityProtocol, trialEpoch: scope.trialEpoch
+        }
+let refused = \(reason : Text) ->
+      { status: "refused", stages: [ ], plan: null : Optional Text
+      , pendingAction: null : Optional Text
+      , pendingAttempt: null : Optional { tier: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text, source: Text, reply: Text }
+      , refusal: some reason, adoptionAllowed: false
+      }
+# Deterministic action vocabulary. Closed-set exhaustive match: a typo'd or
+# unrecognized validationKind can only ever fall through to Accept, never
+# an arbitrary host-executed string. Never chosen from model output.
+let actionFor = \(kind : Text) ->
+      let chosen =
+            if kind == "haskell-compile" then RunGhc { }
+            else if kind == "haskell-lint" then RunHlint { }
+            else if kind == "haskell-format" then RunFourmolu { }
+            else if kind == "haskell-test" then RunStackTest { }
+            else if kind == "grace-typecheck" then RunGrace { }
+            else Accept { }
+      in fold
+          { RunGhc: \_ -> "RunGhc", RunHlint: \_ -> "RunHlint", RunFourmolu: \_ -> "RunFourmolu"
+          , RunStackTest: \_ -> "RunStackTest", RunGrace: \_ -> "RunGrace", Accept: \_ -> "Accept"
+          }
+          chosen
+# Escalation after the first attempt is mechanical, never a model decision.
+let nextTier = \(tier : Text) ->
+      if tier == "XS" then some "S" else if tier == "S" then some "L" else null : Optional Text
+let planningStage = \(planText : Text) ->
+      { role: "planning", size: "XS", model: "gpt-6-luna", modelVersion: null : Optional Text, effort: "low"
+      , source: "baseline", reply: planText }
+let orchestrationStage = \(tier : Text) ->
+      { role: "orchestration", size: "XS", model: "gpt-6-luna", modelVersion: null : Optional Text, effort: "low"
+      , source: "baseline", reply: tier }
+let runExecutionAt = \(planText : Text) -> \(tier : Text) -> \(diagnostics : List Text) ->
+      fold
+        { Routed: \executionChoice ->
+            let executionResponse = prompt
+                  { model: executionChoice.model, effort: executionChoice.effort
+                  , text: show
+                      { role: "execution", plan: planText, goal: task.goal, acceptanceCriteria: task.acceptanceCriteria
+                      , negativeEvidence: task.negativeEvidence + diagnostics
+                      , sources: task.sourcePackets, requiredSourceIds: task.requiredSourceIds }
+                  } : { reply: Text }
+            in some
+                { status: "pendingValidation", stages: [ planningStage planText, orchestrationStage tier ]
+                , plan: some planText, pendingAction: some (actionFor validationKind)
+                , pendingAttempt: some
+                    { tier, size: executionChoice.size, model: executionChoice.model, modelVersion: executionChoice.modelVersion
+                    , effort: executionChoice.effort, source: executionChoice.source, reply: executionResponse.reply }
+                , refusal: null : Optional Text, adoptionAllowed: false
+                }
+        , Refused: \_ -> null
+        }
+        (decide "execution" tier)
+in
+  if uniqueIds packetIds && knownRequired then
+    fold
+      { some: \lastEntry ->
+          if lastEntry.ok then
+            { status: "candidate"
+            , stages:
+                [ planningStage (fold { some: \p -> p, null: "" } plan), orchestrationStage lastEntry.tier
+                , { role: "execution", size: lastEntry.size, model: lastEntry.model, modelVersion: lastEntry.modelVersion
+                  , effort: lastEntry.effort, source: lastEntry.source, reply: lastEntry.reply }
+                ]
+            , plan: plan, pendingAction: null : Optional Text
+            , pendingAttempt: null : Optional { tier: Text, size: Text, model: Text, modelVersion: Optional Text, effort: Text, source: Text, reply: Text }
+            , refusal: null : Optional Text, adoptionAllowed: false
+            }
+          else
+            fold
+              { some: \nextTierName ->
+                  fold
+                    { some: \out -> out
+                    , null: refused "Execution profile unsupported at the next escalation tier"
+                    }
+                    (runExecutionAt (fold { some: \p -> p, null: "" } plan) nextTierName lastEntry.diagnostics)
+              , null: refused "Validation failed after exhausting all fixed tiers"
+              }
+              (nextTier lastEntry.tier)
+      , null:
+          fold
+            { Routed: \planningChoice ->
+                let planResponse = prompt
+                      { model: planningChoice.model, effort: planningChoice.effort
+                      , text: show
+                          { role: "planning", goal: task.goal, acceptanceCriteria: task.acceptanceCriteria
+                          , sources: task.sourcePackets, requiredSourceIds: task.requiredSourceIds }
+                      } : { plan: Text }
+                in fold
+                    { Routed: \orchestrationChoice ->
+                        let triage = prompt
+                              { model: orchestrationChoice.model, effort: orchestrationChoice.effort
+                              , text: show
+                                  { role: "orchestration", plan: planResponse.plan, goal: task.goal
+                                  , acceptanceCriteria: task.acceptanceCriteria, availableTiers: [ "XS", "S", "L" ] }
+                              } : { executionTier: Text }
+                        in fold
+                            { some: \out -> out
+                            , null: refused "Unsupported model-authored starting tier"
+                            }
+                            (runExecutionAt planResponse.plan triage.executionTier [ ])
+                    , Refused: \error -> refused error.reason
+                    }
+                    (decide "orchestration" "XS")
+            , Refused: \error -> refused error.reason
+            }
+            (decide "planning" "XS")
+      }
+      (last history)
+  else refused "Unknown, empty or ambiguous source reference"

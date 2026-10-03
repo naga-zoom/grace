@@ -103,6 +103,7 @@ reservedRecordLabels = HashSet.fromList
     , "length"
     , "let"
     , "map"
+    , "mcp"
     , "of"
     , "prompt"
     , "read"

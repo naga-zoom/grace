@@ -143,6 +143,7 @@ data Syntax s a
     --   "a${x}b"
     | Prompt{ location :: s, import_ :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
     | HTTP{ location :: s, import_ :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
+    | MCP{ location :: s, import_ :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
     | Read{ location :: s, import_ :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
     | GitHub{ location :: s, import_ :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
     | Show{ location :: s, export :: Bool, arguments :: Syntax s a, schema :: Maybe (Type s) }
@@ -320,6 +321,9 @@ instance Monad (Syntax ()) where
 
     HTTP{ location, import_, arguments, schema } >>= f =
         HTTP{ location, import_, arguments = arguments >>= f, schema }
+
+    MCP{ location, import_, arguments, schema } >>= f =
+        MCP{ location, import_, arguments = arguments >>= f, schema }
 
     Read{ location, import_, arguments, schema } >>= f =
         Read{ location, import_, arguments = arguments >>= f, schema }
@@ -546,6 +550,11 @@ instance Plated (Syntax s a) where
 
                 return HTTP{ location, import_, arguments = newArguments, schema }
 
+            MCP{ location, import_, arguments, schema } -> do
+                newArguments <- onSyntax arguments
+
+                return MCP{ location, import_, arguments = newArguments, schema }
+
             Read{ location, import_, arguments, schema } -> do
                 newArguments <- onSyntax arguments
 
@@ -646,6 +655,13 @@ instance Bifunctor Syntax where
         }
 
     first f HTTP{ location, import_, arguments, schema } = HTTP
+        { location = f location
+        , import_
+        , arguments = first f arguments
+        , schema = fmap (fmap f) schema
+        }
+
+    first f MCP{ location, import_, arguments, schema } = MCP
         { location = f location
         , import_
         , arguments = first f arguments
@@ -759,6 +775,8 @@ usedIn name₀ Prompt{ arguments } =
     usedIn name₀ arguments
 usedIn name₀ HTTP{ arguments } =
     usedIn name₀ arguments
+usedIn name₀ MCP{ arguments } =
+    usedIn name₀ arguments
 usedIn name₀ Read{ arguments } =
     usedIn name₀ arguments
 usedIn name₀ GitHub{ arguments } =
@@ -833,6 +851,8 @@ freeVariables Prompt{ arguments } =
     freeVariables arguments
 freeVariables HTTP{ arguments } =
     freeVariables arguments
+freeVariables MCP{ arguments } =
+    freeVariables arguments
 freeVariables Read{ arguments } =
     freeVariables arguments
 freeVariables GitHub{ arguments } =
@@ -853,6 +873,7 @@ effects = Lens.cosmos . effect
     effect =
             (_As @"Prompt" . Lens.to (\_ -> ()))
         <>  (_As @"HTTP"   . Lens.to (\_ -> ()))
+        <>  (_As @"MCP"    . Lens.to (\_ -> ()))
         <>  (_As @"GitHub" . Lens.to (\_ -> ()))
 
 -- | A text literal with interpolated expressions
@@ -1320,6 +1341,30 @@ prettyExpression HTTP{ arguments, import_, schema = Just schema } =
         <>  Pretty.nest 4 (pretty schema)
 
     prefix = if import_ then keyword "import" <> " " else mempty
+prettyExpression MCP{ arguments, import_, schema = Just schema } =
+    Pretty.group (Pretty.flatAlt long short)
+  where
+    short = prefix
+        <>  keyword "mcp"
+        <>  " "
+        <>  prettyProjectExpression arguments
+        <>  " "
+        <>  Pretty.operator ":"
+        <>  " "
+        <>  pretty schema
+
+    long =  prefix
+        <>  keyword "mcp"
+        <>  Pretty.hardline
+        <>  "  "
+        <>  Pretty.nest 2 (prettyProjectExpression arguments)
+        <>  Pretty.hardline
+        <>  "  "
+        <>  Pretty.operator ":"
+        <>  " "
+        <>  Pretty.nest 4 (pretty schema)
+
+    prefix = if import_ then keyword "import" <> " " else mempty
 prettyExpression Read{ arguments, import_, schema = Just schema } =
     Pretty.group (Pretty.flatAlt long short)
   where
@@ -1482,6 +1527,7 @@ prettyApplicationExpression expression
     isApplication Fold{}        = True
     isApplication Prompt{}      = True
     isApplication HTTP{}        = True
+    isApplication MCP{}         = True
     isApplication Read{}        = True
     isApplication GitHub{}      = True
     isApplication Show{}        = True
@@ -1503,6 +1549,10 @@ prettyApplicationExpression expression
         prefix = if import_ then keyword "import" <> " " else mempty
     prettyShort HTTP{ arguments, import_, schema = Nothing } =
         prefix <> keyword "http" <> " " <> prettyProjectExpression arguments
+      where
+        prefix = if import_ then keyword "import" <> " " else mempty
+    prettyShort MCP{ arguments, import_, schema = Nothing } =
+        prefix <> keyword "mcp" <> " " <> prettyProjectExpression arguments
       where
         prefix = if import_ then keyword "import" <> " " else mempty
     prettyShort Read{ arguments, import_, schema = Nothing } =
@@ -1550,6 +1600,14 @@ prettyApplicationExpression expression
     prettyLong HTTP{ import_, arguments } =
             prefix
         <>  keyword "http"
+        <>  Pretty.hardline
+        <>  "  "
+        <>  Pretty.nest 2 (prettyProjectExpression arguments)
+      where
+        prefix = if import_ then keyword "import" <> " " else mempty
+    prettyLong MCP{ import_, arguments } =
+            prefix
+        <>  keyword "mcp"
         <>  Pretty.hardline
         <>  "  "
         <>  Pretty.nest 2 (prettyProjectExpression arguments)

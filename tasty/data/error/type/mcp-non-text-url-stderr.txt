@@ -1,0 +1,19 @@
+Not a subtype
+
+The following type:
+
+  Natural
+
+tasty/data/error/type/mcp-non-text-url-input.ffg:1:12: 
+  │
+1 │ mcp { url: 1, method: "tools/list" } : List Text
+  │            ↑
+
+… is not a subtype of:
+
+  Text
+
+tasty/data/error/type/mcp-non-text-url-input.ffg:1:1: 
+  │
+1 │ mcp { url: 1, method: "tools/list" } : List Text
+  │ ↑
